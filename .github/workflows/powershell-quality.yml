@@ -1,0 +1,46 @@
+name: PowerShell Quality
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+    paths:
+      - 'scripts/**/*.ps1'
+      - 'config/**/*.psd1'
+      - '.github/workflows/powershell-quality.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+
+      - name: PowerShell syntax validation
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path scripts,config -Recurse -Include *.ps1,*.psd1 -ErrorAction SilentlyContinue
+          $failed = $false
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              Write-Error "Syntax errors in $($file.FullName): $($errors -join '; ')"
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $findings = Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Warning,Error
+          $findings | Format-Table -AutoSize
+          if ($findings) { exit 1 }
