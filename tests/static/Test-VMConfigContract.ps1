@@ -40,4 +40,4 @@ if ($failures.Count -gt 0) {
     exit 1
 }
 
-Write-Host 'VM configuration contract: PASS'
+Write-Output 'VM configuration contract: PASS'
