@@ -44,7 +44,6 @@ if ($firmware.SecureBoot -eq 'On') {
     Add-Result 'Secure Boot' 'FAIL' "$($firmware.SecureBoot)"
 }
 
-$tpm = Get-VMKeyProtector -VMName $VMName -ErrorAction SilentlyContinue
 $security = Get-VMSecurity -VMName $VMName
 if ($security.TpmEnabled) {
     Add-Result 'Virtual TPM' 'PASS' 'Enabled'
