@@ -126,7 +126,7 @@ foreach ($status in 'PASS','WARNING','FAIL','NOT-ASSESSED') {
     $summary[$status] = if ($match) { $match.Count } else { 0 }
 }
 
-Write-Host "Summary: $($results.Count) controls; $($summary['PASS']) PASS; $($summary['WARNING']) WARNING; $($summary['FAIL']) FAIL; $($summary['NOT-ASSESSED']) NOT-ASSESSED"
+Write-Output "Summary: $($results.Count) controls; $($summary['PASS']) PASS; $($summary['WARNING']) WARNING; $($summary['FAIL']) FAIL; $($summary['NOT-ASSESSED']) NOT-ASSESSED"
 
 if ($summary['FAIL'] -gt 0) {
     exit 1
