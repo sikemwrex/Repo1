@@ -6,6 +6,7 @@ on:
     branches: [ main ]
     paths:
       - 'scripts/**/*.ps1'
+      - 'tests/**/*.ps1'
       - 'config/**/*.psd1'
       - '.github/workflows/powershell-quality.yml'
 
@@ -25,7 +26,7 @@ jobs:
       - name: PowerShell syntax validation
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path scripts,config -Recurse -Include *.ps1,*.psd1 -ErrorAction SilentlyContinue
+          $files = Get-ChildItem -Path scripts,tests,config -Recurse -Include *.ps1,*.psd1 -ErrorAction SilentlyContinue
           $failed = $false
           foreach ($file in $files) {
             $tokens = $null
@@ -41,6 +42,12 @@ jobs:
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
-          $findings = Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Warning,Error
+          $findings = @()
+          $findings += Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Warning,Error
+          $findings += Invoke-ScriptAnalyzer -Path tests -Recurse -Severity Warning,Error
           $findings | Format-Table -AutoSize
           if ($findings) { exit 1 }
+
+      - name: VM configuration contract
+        shell: pwsh
+        run: ./tests/static/Test-VMConfigContract.ps1
