@@ -1,0 +1,44 @@
+# Secrets and credentials
+*.key
+*.pem
+*.pfx
+*.p12
+*.cer
+*.crt
+*.kdbx
+.env
+.env.*
+secrets/
+credentials/
+
+# Windows / PowerShell transient data
+Thumbs.db
+Desktop.ini
+*.log
+*.tmp
+*.bak
+
+# VM images / exports / checkpoints
+*.vhd
+*.vhdx
+*.avhd
+*.avhdx
+*.vmcx
+*.vmrs
+*.vmgs
+*.iso
+*.ova
+*.ovf
+*.vmdk
+exports/
+checkpoints/
+
+# Evidence defaults to local/private unless sanitized
+evidence/private/
+evidence/raw/
+screenshots/
+logs/
+
+# IDE
+.vscode/
+.idea/
