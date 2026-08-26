@@ -1,14 +1,12 @@
 name: PowerShell Quality
 
+# Validation invariant: every proposed PR revision and every resulting main revision
+# must receive a fresh validation run. Do not rely on a prior green commit.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [ main ]
-    paths:
-      - 'scripts/**/*.ps1'
-      - 'tests/**/*.ps1'
-      - 'config/**/*.psd1'
-      - '.github/workflows/powershell-quality.yml'
 
 permissions:
   contents: read
@@ -18,6 +16,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+
+      - name: Record exact revision
+        shell: pwsh
+        run: |
+          "Validated repository revision: $env:GITHUB_SHA" | Write-Output
 
       - name: Install PSScriptAnalyzer
         shell: pwsh
