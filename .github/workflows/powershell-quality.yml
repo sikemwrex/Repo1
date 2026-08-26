@@ -16,11 +16,20 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
-      - name: Record exact revision
+      - name: Verify exact revision checkout
         shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
-          "Validated repository revision: $env:GITHUB_SHA" | Write-Output
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:EXPECTED_SHA) {
+            Write-Error "Checked out revision $actual but required exact revision $env:EXPECTED_SHA"
+            exit 1
+          }
+          "Validated repository revision: $actual" | Write-Output
 
       - name: Install PSScriptAnalyzer
         shell: pwsh
