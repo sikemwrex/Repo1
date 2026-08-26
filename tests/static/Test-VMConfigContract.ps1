@@ -22,6 +22,7 @@ Assert-True (-not [string]::IsNullOrWhiteSpace($config.VMName)) 'VMName must be 
 Assert-True ($config.Generation -eq 2) 'Generation must be 2 for the accepted baseline.'
 Assert-True ($config.Compute.ProcessorCount -gt 0) 'ProcessorCount must be greater than zero.'
 Assert-True ($config.Compute.StartupMemoryGB -gt 0) 'StartupMemoryGB must be greater than zero.'
+Assert-True (-not [bool]$config.Compute.DynamicMemory) 'Dynamic memory must remain disabled for the accepted baseline unless changed through reviewed architecture/configuration.'
 Assert-True ($config.Storage.SizeGB -ge 64) 'Storage.SizeGB must be at least 64 GB.'
 Assert-True ([bool]$config.Firmware.SecureBoot) 'Secure Boot must remain enabled.'
 Assert-True ([bool]$config.Firmware.VirtualTPM) 'Virtual TPM must remain enabled.'
