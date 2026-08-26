@@ -2,15 +2,12 @@ name: PowerShell Quality
 
 on:
   pull_request:
-    paths:
-      - 'scripts/**/*.ps1'
-      - 'config/**/*.psd1'
-      - '.github/workflows/powershell-quality.yml'
   push:
     branches: [ main ]
     paths:
       - 'scripts/**/*.ps1'
       - 'config/**/*.psd1'
+      - '.github/workflows/powershell-quality.yml'
 
 permissions:
   contents: read
@@ -19,7 +16,7 @@ jobs:
   validate:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install PSScriptAnalyzer
         shell: pwsh
