@@ -52,14 +52,22 @@ $processor = Get-VMProcessor -VMName $VMName
 if ($processor.Count -eq $config.Compute.ProcessorCount) {
     Add-Result 'vCPU baseline' 'PASS' "$($processor.Count) vCPU"
 } else {
-    Add-Result 'vCPU baseline' 'WARNING' "$($processor.Count) vCPU; expected $($config.Compute.ProcessorCount)"
+    Add-Result 'vCPU baseline' 'FAIL' "$($processor.Count) vCPU; expected $($config.Compute.ProcessorCount)"
 }
 
 $expectedStartupBytes = [int64]$config.Compute.StartupMemoryGB * 1GB
 if ($vm.MemoryStartup -eq $expectedStartupBytes) {
     Add-Result 'Startup memory' 'PASS' "$($config.Compute.StartupMemoryGB) GB"
 } else {
-    Add-Result 'Startup memory' 'WARNING' "$([math]::Round($vm.MemoryStartup / 1GB, 2)) GB; expected $($config.Compute.StartupMemoryGB) GB"
+    Add-Result 'Startup memory' 'FAIL' "$([math]::Round($vm.MemoryStartup / 1GB, 2)) GB; expected $($config.Compute.StartupMemoryGB) GB"
+}
+
+$dynamicMemoryEnabled = [bool]$vm.DynamicMemoryEnabled
+$dynamicMemoryExpected = [bool]$config.Compute.DynamicMemory
+if ($dynamicMemoryEnabled -eq $dynamicMemoryExpected) {
+    Add-Result 'Dynamic memory mode' 'PASS' "Enabled=$dynamicMemoryEnabled"
+} else {
+    Add-Result 'Dynamic memory mode' 'FAIL' "Enabled=$dynamicMemoryEnabled; expected $dynamicMemoryExpected"
 }
 
 $firmware = Get-VMFirmware -VMName $VMName
