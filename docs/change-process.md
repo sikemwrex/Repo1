@@ -6,6 +6,18 @@
 
 No material stage is skipped merely because an implementation command completed successfully.
 
+## Validation invariant
+
+**No material change may be accepted based on appearance, intent, command success, or validation of an earlier revision. The exact revision proposed for acceptance must pass its required validation before merge, and the resulting `main` state must pass the same applicable validation again after merge.**
+
+Rules:
+- validation evidence is bound to the exact commit, configuration or runtime state that produced it;
+- any material change after a PASS makes that PASS stale for acceptance purposes;
+- a previous revision's PASS never transfers automatically to a newer revision;
+- merge success is not acceptance;
+- acceptance requires exact-head PASS, independent review, merge/deploy, post-merge/deployment PASS, and evidence capture;
+- the same rule applies to VM configuration, hardening, networking, containment and recovery baselines, not only Git commits.
+
 ## Change states
 General:
 `PROPOSED -> REVIEWED -> IMPLEMENTED -> VALIDATED -> ACCEPTED`
@@ -33,7 +45,7 @@ After implementation, deliberately review from four perspectives:
 
 ## GitHub workflow
 Preferred once repository settings support it:
-`Issue -> Branch -> Change -> Validation -> Pull Request -> Review -> Merge -> Deploy -> Post-deployment validation`
+`Issue -> Branch -> Change -> Exact-head validation -> Pull Request review -> Merge -> Post-merge validation -> Evidence -> Accept`
 
 If Issues are unavailable, the gate/change document and Airtable Change Log provide the tracking record; branch/PR review should still be used for technical changes where practical.
 

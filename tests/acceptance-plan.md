@@ -2,6 +2,7 @@
 
 Mandatory tests before golden-baseline acceptance:
 
+0. Configuration contract — `tests/static/Test-VMConfigContract.ps1` passes against the exact `config/vm-spec.psd1` proposed for deployment.
 1. Functional guest control — Computer Use operates guest Notepad, File Explorer and browser.
 2. Host desktop separation — Computer Use cannot operate a clearly identified host application.
 3. Clipboard isolation — unique clipboard data does not cross the host/guest boundary during baseline testing.
@@ -13,4 +14,4 @@ Mandatory tests before golden-baseline acceptance:
 
 For each test capture: Test ID, timestamp, preconditions, steps, expected result, observed result, PASS/FAIL/BLOCKED, and sanitized evidence reference.
 
-A failed containment test blocks golden checkpoint acceptance.
+A failed configuration-contract or containment test blocks golden checkpoint acceptance.

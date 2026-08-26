@@ -1,13 +1,12 @@
 name: PowerShell Quality
 
+# Validation invariant: every proposed PR revision and every resulting main revision
+# must receive a fresh validation run. Do not rely on a prior green commit.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [ main ]
-    paths:
-      - 'scripts/**/*.ps1'
-      - 'config/**/*.psd1'
-      - '.github/workflows/powershell-quality.yml'
 
 permissions:
   contents: read
@@ -17,6 +16,20 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact revision checkout
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:EXPECTED_SHA) {
+            Write-Error "Checked out revision $actual but required exact revision $env:EXPECTED_SHA"
+            exit 1
+          }
+          "Validated repository revision: $actual" | Write-Output
 
       - name: Install PSScriptAnalyzer
         shell: pwsh
@@ -25,7 +38,7 @@ jobs:
       - name: PowerShell syntax validation
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path scripts,config -Recurse -Include *.ps1,*.psd1 -ErrorAction SilentlyContinue
+          $files = Get-ChildItem -Path scripts,tests,config -Recurse -Include *.ps1,*.psd1 -ErrorAction SilentlyContinue
           $failed = $false
           foreach ($file in $files) {
             $tokens = $null
@@ -41,6 +54,12 @@ jobs:
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
-          $findings = Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Warning,Error
+          $findings = @()
+          $findings += Invoke-ScriptAnalyzer -Path scripts -Recurse -Severity Warning,Error
+          $findings += Invoke-ScriptAnalyzer -Path tests -Recurse -Severity Warning,Error
           $findings | Format-Table -AutoSize
           if ($findings) { exit 1 }
+
+      - name: VM configuration contract
+        shell: pwsh
+        run: ./tests/static/Test-VMConfigContract.ps1
