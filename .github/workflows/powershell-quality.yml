@@ -15,7 +15,7 @@ jobs:
   validate:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5 pinned
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
@@ -33,7 +33,17 @@ jobs:
 
       - name: Install PSScriptAnalyzer
         shell: pwsh
-        run: Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+        run: Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+
+      - name: Verify PSScriptAnalyzer version
+        shell: pwsh
+        run: |
+          $version = (Get-Module PSScriptAnalyzer -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1).Version.ToString()
+          if ($version -ne '1.25.0') {
+            Write-Error "PSScriptAnalyzer version $version installed; required 1.25.0"
+            exit 1
+          }
+          "PSScriptAnalyzer version: $version" | Write-Output
 
       - name: PowerShell syntax validation
         shell: pwsh
