@@ -84,3 +84,7 @@ jobs:
       - name: VM configuration contract
         shell: pwsh
         run: ./tests/static/Test-VMConfigContract.ps1
+
+      - name: Runtime compliance coverage
+        shell: pwsh
+        run: ./tests/static/Test-ComplianceCoverage.ps1
