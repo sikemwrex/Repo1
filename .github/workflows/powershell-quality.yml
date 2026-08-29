@@ -31,6 +31,17 @@ jobs:
           }
           "Validated repository revision: $actual" | Write-Output
 
+      - name: Record runner environment identity
+        shell: pwsh
+        run: |
+          $os = Get-CimInstance Win32_OperatingSystem
+          "Runner OS: $($os.Caption) $($os.Version) build $($os.BuildNumber)" | Write-Output
+          "Runner image OS: $env:ImageOS" | Write-Output
+          "Runner image version: $env:ImageVersion" | Write-Output
+          "PowerShell edition: $($PSVersionTable.PSEdition)" | Write-Output
+          "PowerShell version: $($PSVersionTable.PSVersion)" | Write-Output
+          "Runner architecture: $env:PROCESSOR_ARCHITECTURE" | Write-Output
+
       - name: Install PSScriptAnalyzer
         shell: pwsh
         run: Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
