@@ -11,7 +11,8 @@ Mandatory tests before golden-baseline acceptance:
 6. Privilege boundary — CUAgent cannot perform administrative changes without elevation.
 7. Recovery — checkpoint restore returns the expected prior state.
 8. Reproducibility — documented configuration is sufficient for rebuild by a competent administrator.
+9. Final compliance — `scripts/validation/Test-CUVMCompliance.ps1` is run without `-AllowNotAssessed` and exits 0 with zero FAIL and zero NOT-ASSESSED controls. A run using `-AllowNotAssessed` is interim diagnostic evidence only and can never satisfy final acceptance.
 
 For each test capture: Test ID, timestamp, preconditions, steps, expected result, observed result, PASS/FAIL/BLOCKED, and sanitized evidence reference.
 
-A failed configuration-contract or containment test blocks golden checkpoint acceptance.
+A failed configuration-contract, containment, recovery, privilege, or final-compliance test blocks golden checkpoint acceptance. Any required control left NOT-ASSESSED blocks final acceptance.
