@@ -19,7 +19,11 @@ $requiredTokens = @(
     'Get-VMSwitch',
     '$config.Network.Mode',
     "'InternalNAT'",
-    "'Internal'"
+    "'Internal'",
+    '[switch]$AllowNotAssessed',
+    "$summary['NOT-ASSESSED'] -gt 0",
+    'INTERIM DIAGNOSTIC ONLY',
+    'Final compliance fails closed'
 )
 
 $missing = @($requiredTokens | Where-Object { -not $source.Contains($_) })
