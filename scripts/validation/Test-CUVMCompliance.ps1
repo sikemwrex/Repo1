@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$VMName,
-    [string]$ConfigPath = (Join-Path $PSScriptRoot '..\..\config\vm-spec.psd1')
+    [string]$ConfigPath = (Join-Path $PSScriptRoot '..\..\config\vm-spec.psd1'),
+    [switch]$AllowNotAssessed
 )
 
 $ErrorActionPreference = 'Stop'
@@ -87,7 +88,7 @@ try {
 $checkpoints = @(Get-VMSnapshot -VMName $VMName -ErrorAction SilentlyContinue)
 $goldenCheckpoint = $config.Checkpoints[-1]
 $golden = $checkpoints | Where-Object Name -eq $goldenCheckpoint
-if ($golden) { Add-Result 'Golden checkpoint presence' 'PASS' "$goldenCheckpoint exists" } else { Add-Result 'Golden checkpoint presence' 'NOT-ASSESSED' "$goldenCheckpoint expected before final acceptance only" }
+if ($golden) { Add-Result 'Golden checkpoint presence' 'PASS' "$goldenCheckpoint exists; recovery still requires the separate restore test" } else { Add-Result 'Golden checkpoint presence' 'NOT-ASSESSED' "$goldenCheckpoint expected before final acceptance only" }
 
 Add-Result 'Guest Defender' 'NOT-ASSESSED' 'Requires guest-side validation'
 Add-Result 'Guest Firewall' 'NOT-ASSESSED' 'Requires guest-side validation'
@@ -100,5 +101,14 @@ $counts = $results | Group-Object Status | ForEach-Object { [pscustomobject]@{ S
 $summary = @{}
 foreach ($status in 'PASS','WARNING','FAIL','NOT-ASSESSED') { $match=$counts | Where-Object Status -eq $status; $summary[$status]=if($match){$match.Count}else{0} }
 Write-Output "Summary: $($results.Count) controls; $($summary['PASS']) PASS; $($summary['WARNING']) WARNING; $($summary['FAIL']) FAIL; $($summary['NOT-ASSESSED']) NOT-ASSESSED"
+
 if ($summary['FAIL'] -gt 0) { exit 1 }
+if ($summary['NOT-ASSESSED'] -gt 0) {
+    if ($AllowNotAssessed) {
+        Write-Warning "INTERIM DIAGNOSTIC ONLY: $($summary['NOT-ASSESSED']) control(s) remain NOT-ASSESSED. This run is not acceptance evidence."
+        exit 0
+    }
+    Write-Error "Compliance is incomplete: $($summary['NOT-ASSESSED']) control(s) remain NOT-ASSESSED. Final compliance fails closed until all required controls are assessed."
+    exit 2
+}
 exit 0
