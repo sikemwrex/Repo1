@@ -108,7 +108,7 @@ if ($summary['NOT-ASSESSED'] -gt 0) {
         Write-Warning "INTERIM DIAGNOSTIC ONLY: $($summary['NOT-ASSESSED']) control(s) remain NOT-ASSESSED. This run is not acceptance evidence."
         exit 0
     }
-    Write-Error "Compliance is incomplete: $($summary['NOT-ASSESSED']) control(s) remain NOT-ASSESSED. Final compliance fails closed until all required controls are assessed."
+    Write-Error "Compliance is incomplete: $($summary['NOT-ASSESSED']) control(s) remain NOT-ASSESSED. Final compliance fails closed until all required controls are assessed." -ErrorAction Continue
     exit 2
 }
 exit 0
