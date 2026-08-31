@@ -27,6 +27,7 @@ function Invoke-Scenario {
     )
 
     $allowArg = if ($AllowNotAssessed) { '-AllowNotAssessed' } else { '' }
+    $guestServiceLiteral = if ($GuestServiceEnabled) { '$true' } else { '$false' }
     $child = @"
 function Get-VM { [pscustomobject]@{ Name='CU-VM01'; Generation=2; MemoryStartup=8GB; DynamicMemoryEnabled=`$false } }
 function Get-VMProcessor { [pscustomobject]@{ Count=$ProcessorCount } }
@@ -34,7 +35,7 @@ function Get-VMHardDiskDrive { [pscustomobject]@{ Path='C:\fake\CU-VM01.vhdx' } 
 function Get-VHD { [pscustomobject]@{ VhdType='$VhdType'; Size=[int64]$VhdSize } }
 function Get-VMFirmware { [pscustomobject]@{ SecureBoot='On' } }
 function Get-VMSecurity { [pscustomobject]@{ TpmEnabled=`$true } }
-function Get-VMIntegrationService { [pscustomobject]@{ Enabled=`$$([bool]$GuestServiceEnabled) } }
+function Get-VMIntegrationService { [pscustomobject]@{ Enabled=$guestServiceLiteral } }
 function Get-VMNetworkAdapter { [pscustomobject]@{ SwitchName='$AdapterSwitch' } }
 function Get-VMSwitch { [pscustomobject]@{ SwitchType='$SwitchType' } }
 function Get-VMSnapshot { [pscustomobject]@{ Name='03-COMPUTER-USE-VERIFIED' } }
