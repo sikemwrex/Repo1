@@ -85,6 +85,10 @@ jobs:
         shell: pwsh
         run: ./tests/static/Test-VMConfigContract.ps1
 
-      - name: Runtime compliance coverage
+      - name: Static compliance structure guard
         shell: pwsh
         run: ./tests/static/Test-ComplianceCoverage.ps1
+
+      - name: Runtime compliance behavioral regression
+        shell: pwsh
+        run: ./tests/behavioral/Test-ComplianceBehavior.ps1
