@@ -60,3 +60,4 @@ Invoke-Scenario -Name 'Network attachment drift fails' -AdapterSwitch 'WrongSwit
 Invoke-Scenario -Name 'Guest Services file-copy drift fails' -GuestServiceEnabled $true -AllowNotAssessed -ExpectedExitCode 1
 
 Write-Output 'Runtime compliance behavioral regression suite: PASS'
+exit 0
