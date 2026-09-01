@@ -21,17 +21,28 @@ A dedicated repository named for the project is preferable for long-term provena
 
 Issue-first change tracking cannot currently be enforced. Until resolved, use GitHub branches/PRs plus Airtable Change Log and gate documents.
 
-## GOV-004 — Repository rulesets
-**Status:** Open
+## GOV-004 — Repository rulesets / branch protection
+**Status:** Open — confirmed unenforced
 
-Ruleset query returned no configured repository rulesets. Main-branch protection could not be independently read because the integration received HTTP 403.
+GitHub currently reports `main` as `protected: false`, with branch protection disabled and required status-check enforcement off. The repository rulesets endpoint also returns no configured rulesets.
 
-**Preferred resolution:** require PR-based changes and passing PowerShell Quality checks before merge once repository rules/branch protection can be configured.
+This means PowerShell Quality is evidence, not an authorization boundary. Direct writes to `main` are not technically blocked by repository policy.
+
+**Preferred resolution:** require PR-based changes and the PowerShell Quality status check before merge, prevent bypass where practical, and protect validation/governance paths.
 
 ## GOV-005 — Secret scanning
 **Status:** Unverified
 
 The repository documentation requires secret scanning where supported, but current connector capabilities have not verified its effective state.
 
+## GOV-006 — Final-compliance evidence closure
+**Status:** Open — acceptance blocker for the golden VM baseline
+
+`Test-CUVMCompliance.ps1` deliberately marks guest Defender, guest Firewall, CUAgent privilege, remote-service state, and clipboard/drive containment as `NOT-ASSESSED`. There is currently no repository mechanism that ingests the corresponding guest-side/manual test evidence and binds it to the exact VM/configuration state under evaluation.
+
+Therefore the current final-compliance script is structurally incapable of producing an acceptance-grade exit `0` without `-AllowNotAssessed`. The override is diagnostic only and must never be used to accept the golden baseline.
+
+**Preferred resolution:** implement an evidence-closure mechanism that consumes independently generated guest/manual test results, verifies they belong to the exact VM/configuration/baseline state, and converts only valid current evidence into assessed controls. The mechanism itself must pass exact-head and exact-deployed validation before use.
+
 ## Acceptance rule
-None of these items may be represented as PASS without direct configuration evidence. Until a dedicated private repository exists, sanitized technical content only is permitted here.
+None of these items may be represented as PASS without direct configuration evidence. Until a dedicated private repository exists, sanitized technical content only is permitted here. Golden-baseline acceptance is blocked while GOV-006 remains open.
