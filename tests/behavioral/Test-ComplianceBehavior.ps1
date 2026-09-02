@@ -17,8 +17,10 @@ function Invoke-Scenario {
     param(
         [Parameter(Mandatory)][string]$Name,
         [int]$ProcessorCount = 4,
-        [string]$VhdType = 'Dynamic',
+        [string]$RootVhdType = 'Dynamic',
         [int64]$VhdSize = 100GB,
+        [switch]$UseDifferencingChain,
+        [switch]$BrokenDifferencingParent,
         [string]$SwitchType = 'Internal',
         [string]$AdapterSwitch = 'CU-NAT',
         [bool]$GuestServiceEnabled = $false,
@@ -28,11 +30,36 @@ function Invoke-Scenario {
 
     $allowArg = if ($AllowNotAssessed) { '-AllowNotAssessed' } else { '' }
     $guestServiceLiteral = if ($GuestServiceEnabled) { '$true' } else { '$false' }
+    $attachedPath = if ($UseDifferencingChain) { 'C:\fake\CU-VM01-AutoRecovery.avhdx' } else { 'C:\fake\CU-VM01.vhdx' }
+    $parentPath = if ($BrokenDifferencingParent) { 'C:\fake\missing-parent.vhdx' } else { 'C:\fake\CU-VM01.vhdx' }
+
+    $getVhdFunction = if ($UseDifferencingChain) {
+@"
+function Get-VHD {
+    param([string]`$Path)
+    if (`$Path -like '*.avhdx') {
+        return [pscustomobject]@{ VhdType='Differencing'; Size=[int64]$VhdSize; ParentPath='$parentPath' }
+    }
+    if (`$Path -eq 'C:\fake\CU-VM01.vhdx') {
+        return [pscustomobject]@{ VhdType='$RootVhdType'; Size=[int64]$VhdSize; ParentPath=`$null }
+    }
+    throw "VHD not found: `$Path"
+}
+"@
+    } else {
+@"
+function Get-VHD {
+    param([string]`$Path)
+    return [pscustomobject]@{ VhdType='$RootVhdType'; Size=[int64]$VhdSize; ParentPath=`$null }
+}
+"@
+    }
+
     $child = @"
 function Get-VM { [pscustomobject]@{ Name='CU-VM01'; Generation=2; MemoryStartup=8GB; DynamicMemoryEnabled=`$false } }
 function Get-VMProcessor { [pscustomobject]@{ Count=$ProcessorCount } }
-function Get-VMHardDiskDrive { [pscustomobject]@{ Path='C:\fake\CU-VM01.vhdx' } }
-function Get-VHD { [pscustomobject]@{ VhdType='$VhdType'; Size=[int64]$VhdSize } }
+function Get-VMHardDiskDrive { [pscustomobject]@{ Path='$attachedPath' } }
+$getVhdFunction
 function Get-VMFirmware { [pscustomobject]@{ SecureBoot='On' } }
 function Get-VMSecurity { [pscustomobject]@{ TpmEnabled=`$true } }
 function Get-VMIntegrationService { [pscustomobject]@{ Enabled=$guestServiceLiteral } }
@@ -51,10 +78,13 @@ exit `$LASTEXITCODE
     Write-Output "Behavioral scenario PASS: $Name -> exit $actual"
 }
 
-Invoke-Scenario -Name 'Compliant host-side state, interim diagnostic explicitly allowed' -AllowNotAssessed -ExpectedExitCode 0
+Invoke-Scenario -Name 'Compliant base VHD, interim diagnostic explicitly allowed' -AllowNotAssessed -ExpectedExitCode 0
+Invoke-Scenario -Name 'Golden checkpoint differencing chain is rooted in declared base VHD' -UseDifferencingChain -AllowNotAssessed -ExpectedExitCode 0
 Invoke-Scenario -Name 'Incomplete final assessment fails closed' -ExpectedExitCode 2
 Invoke-Scenario -Name 'vCPU drift fails' -ProcessorCount 2 -AllowNotAssessed -ExpectedExitCode 1
-Invoke-Scenario -Name 'VHD type drift fails' -VhdType 'Fixed' -AllowNotAssessed -ExpectedExitCode 1
+Invoke-Scenario -Name 'Base VHD type drift fails' -RootVhdType 'Fixed' -AllowNotAssessed -ExpectedExitCode 1
+Invoke-Scenario -Name 'Differencing chain with wrong base type fails' -UseDifferencingChain -RootVhdType 'Fixed' -AllowNotAssessed -ExpectedExitCode 1
+Invoke-Scenario -Name 'Broken differencing parent fails closed' -UseDifferencingChain -BrokenDifferencingParent -AllowNotAssessed -ExpectedExitCode 1
 Invoke-Scenario -Name 'Virtual switch type drift fails' -SwitchType 'External' -AllowNotAssessed -ExpectedExitCode 1
 Invoke-Scenario -Name 'Network attachment drift fails' -AdapterSwitch 'WrongSwitch' -AllowNotAssessed -ExpectedExitCode 1
 Invoke-Scenario -Name 'Guest Services file-copy drift fails' -GuestServiceEnabled $true -AllowNotAssessed -ExpectedExitCode 1
