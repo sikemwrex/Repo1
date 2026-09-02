@@ -47,10 +47,72 @@ if ($disks.Count -ne 1) {
     Add-Result 'VM storage attachment' 'FAIL' "$($disks.Count) virtual hard disks detected; expected exactly 1"
 } else {
     try {
-        $vhd = Get-VHD -Path $disks[0].Path -ErrorAction Stop
-        if ($vhd.VhdType.ToString() -eq $config.Storage.VHDType) { Add-Result 'VHD type' 'PASS' $vhd.VhdType.ToString() } else { Add-Result 'VHD type' 'FAIL' "$($vhd.VhdType); expected $($config.Storage.VHDType)" }
         $expectedDiskBytes = [int64]$config.Storage.SizeGB * 1GB
-        if ($vhd.Size -eq $expectedDiskBytes) { Add-Result 'VHD size' 'PASS' "$($config.Storage.SizeGB) GB" } else { Add-Result 'VHD size' 'FAIL' "$([math]::Round($vhd.Size/1GB,2)) GB; expected $($config.Storage.SizeGB) GB" }
+        $currentPath = [string]$disks[0].Path
+        $seenPaths = @{}
+        $chain = [System.Collections.Generic.List[object]]::new()
+        $chainValid = $true
+
+        while ($currentPath) {
+            if ($chain.Count -ge 64) {
+                Add-Result 'VHD chain integrity' 'FAIL' 'VHD parent chain exceeds 64 layers'
+                $chainValid = $false
+                break
+            }
+
+            $pathKey = $currentPath.ToLowerInvariant()
+            if ($seenPaths.ContainsKey($pathKey)) {
+                Add-Result 'VHD chain integrity' 'FAIL' "Cycle detected at '$currentPath'"
+                $chainValid = $false
+                break
+            }
+            $seenPaths[$pathKey] = $true
+
+            $layer = Get-VHD -Path $currentPath -ErrorAction Stop
+            $chain.Add([pscustomobject]@{
+                Path       = $currentPath
+                VhdType    = $layer.VhdType.ToString()
+                Size       = [int64]$layer.Size
+                ParentPath = [string]$layer.ParentPath
+            })
+
+            if ([int64]$layer.Size -ne $expectedDiskBytes) {
+                Add-Result 'VHD virtual size' 'FAIL' "$currentPath reports $([math]::Round($layer.Size/1GB,2)) GB; expected $($config.Storage.SizeGB) GB"
+                $chainValid = $false
+            }
+
+            $currentPath = [string]$layer.ParentPath
+        }
+
+        if ($chain.Count -gt 0) {
+            $root = $chain[$chain.Count - 1]
+            if ($root.VhdType -eq $config.Storage.VHDType) {
+                Add-Result 'VHD base type' 'PASS' "$($root.VhdType) root: $($root.Path)"
+            } else {
+                Add-Result 'VHD base type' 'FAIL' "$($root.VhdType) root; expected $($config.Storage.VHDType)"
+                $chainValid = $false
+            }
+
+            if ($chain.Count -gt 1) {
+                $invalidChildren = @($chain | Select-Object -First ($chain.Count - 1) | Where-Object VhdType -ne 'Differencing')
+                if ($invalidChildren.Count -gt 0) {
+                    Add-Result 'VHD checkpoint chain' 'FAIL' "Non-root checkpoint layer is not Differencing: $($invalidChildren[0].Path) ($($invalidChildren[0].VhdType))"
+                    $chainValid = $false
+                } else {
+                    Add-Result 'VHD checkpoint chain' 'PASS' "$($chain.Count - 1) differencing layer(s) rooted in declared base VHD"
+                }
+            } else {
+                Add-Result 'VHD checkpoint chain' 'PASS' 'No active differencing layer'
+            }
+        } else {
+            Add-Result 'VHD chain integrity' 'FAIL' 'No readable VHD layer returned'
+            $chainValid = $false
+        }
+
+        if ($chainValid) {
+            Add-Result 'VHD chain integrity' 'PASS' "$($chain.Count) layer(s); attached leaf '$($disks[0].Path)'"
+            Add-Result 'VHD virtual size' 'PASS' "$($config.Storage.SizeGB) GB across validated chain"
+        }
     } catch {
         Add-Result 'VHD metadata' 'FAIL' $_.Exception.Message
     }
