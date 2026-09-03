@@ -24,7 +24,9 @@ function Invoke-Scenario {
         [string]$SwitchType = 'Internal',
         [string]$AdapterSwitch = 'CU-NAT',
         [bool]$GuestServiceEnabled = $false,
+        [switch]$MissingDeclaredCheckpoints,
         [switch]$AllowNotAssessed,
+        [string]$ExpectedOutputContains,
         [Parameter(Mandatory)][int]$ExpectedExitCode
     )
 
@@ -55,6 +57,23 @@ function Get-VHD {
 "@
     }
 
+    $snapshotFunction = if ($MissingDeclaredCheckpoints) {
+@"
+function Get-VMSnapshot { [pscustomobject]@{ Name='03-COMPUTER-USE-VERIFIED' } }
+"@
+    } else {
+@"
+function Get-VMSnapshot {
+    @(
+        [pscustomobject]@{ Name='00-WIN11-CLEAN' },
+        [pscustomobject]@{ Name='01-WIN11-HARDENED' },
+        [pscustomobject]@{ Name='02-CHATGPT-INSTALLED' },
+        [pscustomobject]@{ Name='03-COMPUTER-USE-VERIFIED' }
+    )
+}
+"@
+    }
+
     $child = @"
 function Get-VM { [pscustomobject]@{ Name='CU-VM01'; Generation=2; MemoryStartup=8GB; DynamicMemoryEnabled=`$false } }
 function Get-VMProcessor { [pscustomobject]@{ Count=$ProcessorCount } }
@@ -65,21 +84,26 @@ function Get-VMSecurity { [pscustomobject]@{ TpmEnabled=`$true } }
 function Get-VMIntegrationService { [pscustomobject]@{ Enabled=$guestServiceLiteral } }
 function Get-VMNetworkAdapter { [pscustomobject]@{ SwitchName='$AdapterSwitch' } }
 function Get-VMSwitch { [pscustomobject]@{ SwitchType='$SwitchType' } }
-function Get-VMSnapshot { [pscustomobject]@{ Name='03-COMPUTER-USE-VERIFIED' } }
+$snapshotFunction
 & '$validatorLiteral' -ConfigPath '$configLiteral' $allowArg
 exit `$LASTEXITCODE
 "@
 
-    & $pwsh -NoLogo -NoProfile -NonInteractive -Command $child | Out-Host
+    $output = (& $pwsh -NoLogo -NoProfile -NonInteractive -Command $child 2>&1 | Out-String)
     $actual = $LASTEXITCODE
+    Write-Output $output
     if ($actual -ne $ExpectedExitCode) {
         throw "Scenario '$Name' exit code $actual; expected $ExpectedExitCode"
+    }
+    if ($ExpectedOutputContains -and $output -notlike "*$ExpectedOutputContains*") {
+        throw "Scenario '$Name' did not emit expected text: $ExpectedOutputContains"
     }
     Write-Output "Behavioral scenario PASS: $Name -> exit $actual"
 }
 
 Invoke-Scenario -Name 'Compliant base VHD, interim diagnostic explicitly allowed' -AllowNotAssessed -ExpectedExitCode 0
 Invoke-Scenario -Name 'Golden checkpoint differencing chain is rooted in declared base VHD' -UseDifferencingChain -AllowNotAssessed -ExpectedExitCode 0
+Invoke-Scenario -Name 'Missing declared recovery checkpoints are detected' -MissingDeclaredCheckpoints -AllowNotAssessed -ExpectedOutputContains 'Missing required checkpoint(s)' -ExpectedExitCode 0
 Invoke-Scenario -Name 'Incomplete final assessment fails closed' -ExpectedExitCode 2
 Invoke-Scenario -Name 'vCPU drift fails' -ProcessorCount 2 -AllowNotAssessed -ExpectedExitCode 1
 Invoke-Scenario -Name 'Base VHD type drift fails' -RootVhdType 'Fixed' -AllowNotAssessed -ExpectedExitCode 1
