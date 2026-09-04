@@ -103,7 +103,7 @@ exit `$LASTEXITCODE
 
 Invoke-Scenario -Name 'Compliant base VHD, interim diagnostic explicitly allowed' -AllowNotAssessed -ExpectedExitCode 0
 Invoke-Scenario -Name 'Golden checkpoint differencing chain is rooted in declared base VHD' -UseDifferencingChain -AllowNotAssessed -ExpectedExitCode 0
-Invoke-Scenario -Name 'Missing declared recovery checkpoints are detected' -MissingDeclaredCheckpoints -AllowNotAssessed -ExpectedOutputContains 'Missing required checkpoint(s)' -ExpectedExitCode 0
+Invoke-Scenario -Name 'Missing declared recovery checkpoints fail even in diagnostic mode' -MissingDeclaredCheckpoints -AllowNotAssessed -ExpectedOutputContains 'Missing required checkpoint(s)' -ExpectedExitCode 1
 Invoke-Scenario -Name 'Incomplete final assessment fails closed' -ExpectedExitCode 2
 Invoke-Scenario -Name 'vCPU drift fails' -ProcessorCount 2 -AllowNotAssessed -ExpectedExitCode 1
 Invoke-Scenario -Name 'Base VHD type drift fails' -RootVhdType 'Fixed' -AllowNotAssessed -ExpectedExitCode 1
