@@ -158,7 +158,7 @@ if ($declaredCheckpoints.Count -eq 0) {
     $missingCheckpoints = @($declaredCheckpoints | Where-Object { $name = $_; -not ($checkpoints | Where-Object Name -eq $name) })
     $duplicateRuntime = @($declaredCheckpoints | Where-Object { $name = $_; @($checkpoints | Where-Object Name -eq $name).Count -gt 1 })
     if ($missingCheckpoints.Count -gt 0) {
-        Add-Result 'Declared checkpoint set' 'NOT-ASSESSED' "Missing required checkpoint(s): $($missingCheckpoints -join ', ')"
+        Add-Result 'Declared checkpoint set' 'FAIL' "Missing required checkpoint(s): $($missingCheckpoints -join ', ')"
     } elseif ($duplicateRuntime.Count -gt 0) {
         Add-Result 'Declared checkpoint set' 'FAIL' "Duplicate runtime checkpoint name(s): $($duplicateRuntime -join ', ')"
     } else {
