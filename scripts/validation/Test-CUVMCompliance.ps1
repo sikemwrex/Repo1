@@ -148,9 +148,33 @@ try {
 }
 
 $checkpoints = @(Get-VMSnapshot -VMName $VMName -ErrorAction SilentlyContinue)
-$goldenCheckpoint = $config.Checkpoints[-1]
-$golden = $checkpoints | Where-Object Name -eq $goldenCheckpoint
-if ($golden) { Add-Result 'Golden checkpoint presence' 'PASS' "$goldenCheckpoint exists; recovery still requires the separate restore test" } else { Add-Result 'Golden checkpoint presence' 'NOT-ASSESSED' "$goldenCheckpoint expected before final acceptance only" }
+$declaredCheckpoints = @($config.Checkpoints)
+$duplicateDeclared = @($declaredCheckpoints | Group-Object | Where-Object Count -gt 1)
+if ($declaredCheckpoints.Count -eq 0) {
+    Add-Result 'Declared checkpoint set' 'FAIL' 'No checkpoints are declared in configuration'
+} elseif ($duplicateDeclared.Count -gt 0) {
+    Add-Result 'Declared checkpoint set' 'FAIL' "Duplicate checkpoint name(s) in configuration: $($duplicateDeclared.Name -join ', ')"
+} else {
+    $missingCheckpoints = @($declaredCheckpoints | Where-Object { $name = $_; -not ($checkpoints | Where-Object Name -eq $name) })
+    $duplicateRuntime = @($declaredCheckpoints | Where-Object { $name = $_; @($checkpoints | Where-Object Name -eq $name).Count -gt 1 })
+    if ($missingCheckpoints.Count -gt 0) {
+        Add-Result 'Declared checkpoint set' 'FAIL' "Missing required checkpoint(s): $($missingCheckpoints -join ', ')"
+    } elseif ($duplicateRuntime.Count -gt 0) {
+        Add-Result 'Declared checkpoint set' 'FAIL' "Duplicate runtime checkpoint name(s): $($duplicateRuntime -join ', ')"
+    } else {
+        Add-Result 'Declared checkpoint set' 'PASS' "$($declaredCheckpoints.Count) unique declared checkpoints present"
+    }
+}
+
+$goldenCheckpoint = $declaredCheckpoints[-1]
+if ($goldenCheckpoint) {
+    $golden = @($checkpoints | Where-Object Name -eq $goldenCheckpoint)
+    if ($golden.Count -eq 1) { Add-Result 'Golden checkpoint presence' 'PASS' "$goldenCheckpoint exists uniquely; recovery still requires the separate restore test" }
+    elseif ($golden.Count -eq 0) { Add-Result 'Golden checkpoint presence' 'NOT-ASSESSED' "$goldenCheckpoint expected before final acceptance only" }
+    else { Add-Result 'Golden checkpoint presence' 'FAIL' "$goldenCheckpoint exists $($golden.Count) times; expected exactly once" }
+} else {
+    Add-Result 'Golden checkpoint presence' 'FAIL' 'No golden checkpoint can be derived from configuration'
+}
 
 Add-Result 'Guest Defender' 'NOT-ASSESSED' 'Requires guest-side validation'
 Add-Result 'Guest Firewall' 'NOT-ASSESSED' 'Requires guest-side validation'
