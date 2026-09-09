@@ -85,6 +85,40 @@ jobs:
         shell: pwsh
         run: ./tests/host-readiness/Test-GateAReadOnly.ps1
 
+      - name: Gate A collector smoke test
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'cu-gate-a-smoke'
+          ./scripts/host/Get-CUVMHostReadiness.ps1 -OutputRoot $root
+
+          $capture = Get-ChildItem -LiteralPath $root -Directory |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $capture) {
+            Write-Error 'Gate A collector produced no capture directory.'
+            exit 1
+          }
+
+          $rawPath = Join-Path $capture.FullName 'GateA-Raw.json'
+          $sanitizedPath = Join-Path $capture.FullName 'GateA-Sanitized.json'
+          if (-not (Test-Path -LiteralPath $rawPath) -or -not (Test-Path -LiteralPath $sanitizedPath)) {
+            Write-Error 'Gate A collector did not produce both evidence files.'
+            exit 1
+          }
+
+          $sanitized = Get-Content -LiteralPath $sanitizedPath -Raw | ConvertFrom-Json
+          $actualRawHash = (Get-FileHash -LiteralPath $rawPath -Algorithm SHA256).Hash
+          if ($sanitized.RawEvidenceSha256 -ne $actualRawHash) {
+            Write-Error 'Gate A sanitized evidence is not bound to the produced raw evidence hash.'
+            exit 1
+          }
+          if (-not $sanitized.EvidenceId -or -not $sanitized.CollectorSha256) {
+            Write-Error 'Gate A evidence identity/provenance fields are incomplete.'
+            exit 1
+          }
+
+          'Gate A collector smoke test: PASS' | Write-Output
+
       - name: VM configuration contract
         shell: pwsh
         run: ./tests/static/Test-VMConfigContract.ps1
