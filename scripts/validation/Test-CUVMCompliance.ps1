@@ -150,6 +150,7 @@ try {
 $checkpoints = @(Get-VMSnapshot -VMName $VMName -ErrorAction SilentlyContinue)
 $declaredCheckpoints = @($config.Checkpoints)
 $duplicateDeclared = @($declaredCheckpoints | Group-Object | Where-Object Count -gt 1)
+$checkpointSetValid = $false
 if ($declaredCheckpoints.Count -eq 0) {
     Add-Result 'Declared checkpoint set' 'FAIL' 'No checkpoints are declared in configuration'
 } elseif ($duplicateDeclared.Count -gt 0) {
@@ -163,7 +164,50 @@ if ($declaredCheckpoints.Count -eq 0) {
         Add-Result 'Declared checkpoint set' 'FAIL' "Duplicate runtime checkpoint name(s): $($duplicateRuntime -join ', ')"
     } else {
         Add-Result 'Declared checkpoint set' 'PASS' "$($declaredCheckpoints.Count) unique declared checkpoints present"
+        $checkpointSetValid = $true
     }
+}
+
+if ($checkpointSetValid) {
+    $lineageFailure = $null
+
+    for ($index = 1; $index -lt $declaredCheckpoints.Count; $index++) {
+        $childName = $declaredCheckpoints[$index]
+        $expectedParentName = $declaredCheckpoints[$index - 1]
+        $childSnapshot = $checkpoints | Where-Object Name -eq $childName | Select-Object -First 1
+        $expectedParent = $checkpoints | Where-Object Name -eq $expectedParentName | Select-Object -First 1
+
+        try {
+            $actualParents = @(Get-VMSnapshot -ParentOf $childSnapshot -ErrorAction Stop)
+        } catch {
+            $lineageFailure = "Unable to read immediate parent of '$childName': $($_.Exception.Message)"
+            break
+        }
+
+        if ($actualParents.Count -ne 1) {
+            $lineageFailure = "Checkpoint '$childName' has $($actualParents.Count) immediate parent result(s); expected exactly one '$expectedParentName'"
+            break
+        }
+
+        $actualParent = $actualParents[0]
+        if (-not $childSnapshot.Id -or -not $expectedParent.Id -or -not $actualParent.Id) {
+            $lineageFailure = "Checkpoint identity evidence is incomplete while validating '$expectedParentName' -> '$childName'"
+            break
+        }
+
+        if ($actualParent.Id -ne $expectedParent.Id) {
+            $lineageFailure = "Checkpoint '$childName' immediate parent is '$($actualParent.Name)'; expected '$expectedParentName'"
+            break
+        }
+    }
+
+    if ($lineageFailure) {
+        Add-Result 'Checkpoint recovery lineage' 'FAIL' $lineageFailure
+    } else {
+        Add-Result 'Checkpoint recovery lineage' 'PASS' "$($declaredCheckpoints.Count) declared checkpoints form the required immediate parent/child chain"
+    }
+} else {
+    Add-Result 'Checkpoint recovery lineage' 'FAIL' 'Cannot validate recovery lineage because the declared checkpoint set is invalid'
 }
 
 $goldenCheckpoint = $declaredCheckpoints[-1]
