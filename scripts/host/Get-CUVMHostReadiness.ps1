@@ -227,7 +227,6 @@ $raw = [ordered]@{
     EvidenceId            = [guid]::NewGuid().Guid
     CapturedAt            = (Get-Date).ToString('o')
     CollectorSha256       = $collectorHash
-    RawEvidenceSha256     = $rawEvidenceHash
     ReadOnlyGate          = 'Gate A'
     OperatingSystem       = $os
     ComputerSystem        = $computer
@@ -270,6 +269,7 @@ $sanitized = [ordered]@{
     EvidenceId            = $raw.EvidenceId
     CapturedAt            = $raw.CapturedAt
     CollectorSha256       = $collectorHash
+    RawEvidenceSha256     = $rawEvidenceHash
     ReadOnlyGate          = 'Gate A'
     OS                    = if ($os.Available) {
         [ordered]@{
