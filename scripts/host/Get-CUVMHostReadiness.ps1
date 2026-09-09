@@ -1,7 +1,7 @@
 #requires -Version 7.0
 [CmdletBinding()]
 param(
-    [string]$OutputRoot = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'CU-VM-GateA')
+    [string]$OutputRoot = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CU-VM\\GateA')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -227,6 +227,7 @@ $raw = [ordered]@{
     EvidenceId            = [guid]::NewGuid().Guid
     CapturedAt            = (Get-Date).ToString('o')
     CollectorSha256       = $collectorHash
+    RawEvidenceSha256     = $rawEvidenceHash
     ReadOnlyGate          = 'Gate A'
     OperatingSystem       = $os
     ComputerSystem        = $computer
@@ -245,6 +246,7 @@ $raw = [ordered]@{
 }
 
 $raw | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $rawPath -Encoding utf8
+$rawEvidenceHash = (Get-FileHash -LiteralPath $rawPath -Algorithm SHA256).Hash
 
 $osData = $os.Data
 $computerData = $computer.Data
