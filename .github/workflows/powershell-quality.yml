@@ -92,3 +92,7 @@ jobs:
       - name: Runtime compliance behavioral regression
         shell: pwsh
         run: ./tests/behavioral/Test-ComplianceBehavior.ps1
+
+      - name: Trusted checkpoint-lineage oracle self-test
+        shell: pwsh
+        run: ./tests/trusted/Test-CheckpointLineageOracle.ps1 -SelfTest
