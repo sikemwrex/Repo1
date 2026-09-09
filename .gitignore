@@ -42,3 +42,6 @@ logs/
 # IDE
 .vscode/
 .idea/
+
+# Gate A raw topology evidence must never enter the public repository
+**/GateA-Raw.json

@@ -1,10 +1,19 @@
 # Gate A — Host Readiness
 
 ## Status
-Not started.
+Prepared for execution — collector not yet run on the physical host.
 
 ## Change class
 R0 — read-only inspection only.
+
+## Executable collector
+`scripts/host/Get-CUVMHostReadiness.ps1`
+
+Static read-only boundary test:
+`tests/host-readiness/Test-GateAReadOnly.ps1`
+
+Runbook:
+`docs/runbooks/GATE-A-host-readiness.md`
 
 ## Required checks
 - Windows edition and build
@@ -16,7 +25,7 @@ R0 — read-only inspection only.
 - Secure Boot status
 - TPM availability
 - existing Hyper-V VMs and virtual switches
-- relevant host and LAN topology
+- NAT objects, adapters, VPNs and IPv4 routes needed for topology review
 
 ## Required decision output
 - safe `CU-VM01` CPU/RAM/disk allocation
@@ -25,7 +34,7 @@ R0 — read-only inspection only.
 - proposed Gate B network design based on actual topology
 
 ## Stop condition
-No Hyper-V, firewall, identity or network configuration changes are authorised during Gate A.
+No Hyper-V, firewall, identity, service, account or network configuration changes are authorised during Gate A.
 
-## Repository handling
-The repository is currently public and GitHub Issues are disabled. Do not commit raw host/network evidence here. Store only sanitized conclusions or references until repository privacy/governance settings are reviewed.
+## Evidence handling
+The repository is public. Raw host/network evidence must remain private and must not be committed. The collector produces a raw private JSON file plus a sanitized summary.
