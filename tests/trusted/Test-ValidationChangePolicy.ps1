@@ -122,9 +122,6 @@ if (-not $ChangedFiles -or $ChangedFiles.Count -eq 0) {
 }
 
 $normalizedInput = Normalize-ChangedFiles -Files $ChangedFiles
-$requiresLineageOracle = (
-    'scripts/validation/Test-CUVMCompliance.ps1' -in $normalizedInput
-)
 
 $realOracle = {
     if (-not $CandidateValidatorPath) { throw 'CandidateValidatorPath is required when the production compliance validator changes.' }
