@@ -1,7 +1,7 @@
 name: Trusted Validator Meta Gate
 
-# Runs from the base branch with read-only permissions so a candidate PR cannot
-# redefine the oracle that judges its validator change.
+# This workflow is sourced from the accepted base branch. Candidate revisions
+# cannot redefine the policy/oracle used to judge their validation-sensitive changes.
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  trusted-lineage-oracle:
+  trusted-validation-policy:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: windows-latest
     timeout-minutes: 10
@@ -39,6 +39,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           path: candidate
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Verify trusted and candidate revisions
         shell: pwsh
@@ -59,13 +60,27 @@ jobs:
           "Trusted base revision: $trustedActual" | Write-Output
           "Candidate revision: $candidateActual" | Write-Output
 
-      - name: Self-test trusted oracle
-        shell: pwsh
-        run: ./trusted/tests/trusted/Test-CheckpointLineageOracle.ps1 -SelfTest
-
-      - name: Judge candidate validator with trusted-base oracle
+      - name: Self-test accepted-base trusted policy and lineage oracle
         shell: pwsh
         run: |
-          ./trusted/tests/trusted/Test-CheckpointLineageOracle.ps1 `
+          ./trusted/tests/trusted/Test-CheckpointLineageOracle.ps1 -SelfTest
+          ./trusted/tests/trusted/Test-ValidationChangePolicy.ps1 -SelfTest
+
+      - name: Enforce accepted-base validation-change policy
+        shell: pwsh
+        env:
+          TRUSTED_SHA: ${{ github.event.pull_request.base.sha }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $changed = @(git -C candidate diff --name-only $env:TRUSTED_SHA $env:CANDIDATE_SHA)
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Unable to calculate exact base-to-head changed-file set."
+            exit 1
+          }
+          "Changed files:" | Write-Output
+          $changed | ForEach-Object { " - $_" | Write-Output }
+
+          ./trusted/tests/trusted/Test-ValidationChangePolicy.ps1 `
+            -ChangedFiles $changed `
             -CandidateValidatorPath ./candidate/scripts/validation/Test-CUVMCompliance.ps1 `
             -TrustedConfigPath ./trusted/config/vm-spec.psd1
