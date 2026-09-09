@@ -29,7 +29,7 @@ Documents\CU-VM-GateA\
 It produces:
 
 - `GateA-Raw.json` — private operational evidence containing network topology needed to select the Gate B NAT subnet.
-- `GateA-Sanitized.json` — shareable summary excluding host name, usernames, MAC addresses, IP addresses, route prefixes and local VM/network object names.
+- `GateA-Sanitized.json` — shareable summary excluding host name, usernames, MAC addresses, IP addresses, route prefixes and local VM/network object names. It includes the SHA-256 of `GateA-Raw.json` so later analysis can prove which private evidence file the summary belongs to.
 
 ## Evidence handling
 The GitHub repository is public.
