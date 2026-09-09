@@ -96,3 +96,7 @@ jobs:
       - name: Trusted checkpoint-lineage oracle self-test
         shell: pwsh
         run: ./tests/trusted/Test-CheckpointLineageOracle.ps1 -SelfTest
+
+      - name: Trusted validation-change policy self-test
+        shell: pwsh
+        run: ./tests/trusted/Test-ValidationChangePolicy.ps1 -SelfTest
