@@ -81,6 +81,10 @@ jobs:
           $findings | Format-Table -AutoSize
           if ($findings) { exit 1 }
 
+      - name: Gate A read-only collector guard
+        shell: pwsh
+        run: ./tests/host-readiness/Test-GateAReadOnly.ps1
+
       - name: VM configuration contract
         shell: pwsh
         run: ./tests/static/Test-VMConfigContract.ps1
