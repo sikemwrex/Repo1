@@ -345,12 +345,7 @@ $sanitized = [ordered]@{
     QueryFailures         = @(
         $raw.GetEnumerator() |
             Where-Object { $_.Value -is [pscustomobject] -and $_.Value.PSObject.Properties.Name -contains 'Available' -and -not $_.Value.Available } |
-            ForEach-Object {
-                [pscustomobject]@{
-                    Query = $_.Key
-                    Error = $_.Value.Error
-                }
-            }
+            ForEach-Object { $_.Key }
     )
     Privacy               = 'Sanitized summary excludes host name, usernames, MAC addresses, IP addresses, route prefixes, VM names, switch names and VPN names.'
 }
