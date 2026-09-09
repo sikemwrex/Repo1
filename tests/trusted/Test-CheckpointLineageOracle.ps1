@@ -154,6 +154,15 @@ exit 0
 
         Invoke-LineageOracle -ValidatorPath $good -ConfigPath $config
 
+        $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
+        $entrypointOutput = (& $pwsh -NoLogo -NoProfile -NonInteractive -File $PSCommandPath -CandidateValidatorPath $good -TrustedConfigPath $config 2>&1 | Out-String)
+        $entrypointExit = $LASTEXITCODE
+        Write-Output $entrypointOutput
+        if ($entrypointExit -ne 0) {
+            throw "Trusted oracle entrypoint self-test failed: good candidate returned process exit $entrypointExit; expected 0"
+        }
+        Write-Output 'Trusted oracle entrypoint self-test PASS: good candidate -> process exit 0'
+
         $rejected = $false
         try {
             Invoke-LineageOracle -ValidatorPath $bad -ConfigPath $config
@@ -175,3 +184,4 @@ if (-not $CandidateValidatorPath -or -not $TrustedConfigPath) {
 }
 
 Invoke-LineageOracle -ValidatorPath $CandidateValidatorPath -ConfigPath $TrustedConfigPath
+exit 0
