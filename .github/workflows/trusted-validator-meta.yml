@@ -1,0 +1,58 @@
+name: Trusted Validator Meta Gate
+
+# Runs from the base branch with read-only permissions so a candidate PR cannot
+# redefine the oracle that judges its validator change.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  trusted-lineage-oracle:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout trusted base
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+
+      - name: Checkout exact candidate head
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+
+      - name: Verify trusted and candidate revisions
+        shell: pwsh
+        env:
+          TRUSTED_SHA: ${{ github.event.pull_request.base.sha }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $trustedActual = (git -C trusted rev-parse HEAD).Trim()
+          $candidateActual = (git -C candidate rev-parse HEAD).Trim()
+          if ($trustedActual -ne $env:TRUSTED_SHA) {
+            Write-Error "Trusted checkout $trustedActual; required $env:TRUSTED_SHA"
+            exit 1
+          }
+          if ($candidateActual -ne $env:CANDIDATE_SHA) {
+            Write-Error "Candidate checkout $candidateActual; required $env:CANDIDATE_SHA"
+            exit 1
+          }
+          "Trusted base revision: $trustedActual" | Write-Output
+          "Candidate revision: $candidateActual" | Write-Output
+
+      - name: Self-test trusted oracle
+        shell: pwsh
+        run: ./trusted/tests/trusted/Test-CheckpointLineageOracle.ps1 -SelfTest
+
+      - name: Judge candidate validator with trusted-base oracle
+        shell: pwsh
+        run: |
+          ./trusted/tests/trusted/Test-CheckpointLineageOracle.ps1 `
+            -CandidateValidatorPath ./candidate/scripts/validation/Test-CUVMCompliance.ps1 `
+            -TrustedConfigPath ./trusted/config/vm-spec.psd1
