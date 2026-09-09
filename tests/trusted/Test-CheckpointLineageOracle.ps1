@@ -175,3 +175,4 @@ if (-not $CandidateValidatorPath -or -not $TrustedConfigPath) {
 }
 
 Invoke-LineageOracle -ValidatorPath $CandidateValidatorPath -ConfigPath $TrustedConfigPath
+exit 0
