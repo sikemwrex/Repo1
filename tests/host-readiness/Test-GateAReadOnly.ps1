@@ -21,31 +21,12 @@ if ($parseErrors.Count -gt 0) {
     throw "Gate A collector has syntax errors: $($parseErrors -join '; ')"
 }
 
-$blockedCommands = @(
-    'Add-LocalGroupMember',
-    'Disable-NetAdapter',
-    'Disable-WindowsOptionalFeature',
-    'Enable-NetAdapter',
-    'Enable-WindowsOptionalFeature',
-    'New-LocalUser',
-    'New-NetFirewallRule',
-    'New-NetNat',
-    'New-VM',
-    'New-VMSwitch',
-    'Remove-LocalUser',
-    'Remove-NetFirewallRule',
-    'Remove-NetNat',
-    'Remove-VM',
-    'Remove-VMSwitch',
-    'Restart-NetAdapter',
-    'Set-LocalUser',
-    'Set-NetFirewallRule',
-    'Set-NetNat',
-    'Set-VM',
-    'Set-VMSwitch',
-    'Stop-Service',
-    'Start-Service'
+$allowedEvidenceWrites = @(
+    'New-Item',
+    'Set-Content'
 )
+
+$stateChangingPattern = '^(Add|Clear|Disable|Enable|Install|New|Remove|Rename|Reset|Restart|Resume|Set|Start|Stop|Suspend|Uninstall|Update)-'
 
 $commandAsts = $ast.FindAll(
     {
@@ -62,9 +43,16 @@ $commands = @(
         Sort-Object -Unique
 )
 
-$violations = @($commands | Where-Object { $_ -in $blockedCommands })
+$violations = @(
+    $commands |
+        Where-Object {
+            $_ -match $stateChangingPattern -and
+            $_ -notin $allowedEvidenceWrites
+        }
+)
+
 if ($violations.Count -gt 0) {
-    throw "Gate A read-only boundary violated by command(s): $($violations -join ', ')"
+    throw "Gate A read-only boundary violated by state-changing command(s): $($violations -join ', ')"
 }
 
 $requiredQueries = @(
@@ -78,6 +66,7 @@ $requiredQueries = @(
     'Get-VMSwitch',
     'Get-NetNat',
     'Get-NetAdapter',
+    'Get-NetIPAddress',
     'Get-NetRoute'
 )
 
