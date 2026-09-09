@@ -13,18 +13,20 @@ The collector must not:
 - install software.
 
 ## Run
-Open **PowerShell 7** on the Windows host from a normal user session and run:
+Open **PowerShell 7 as Administrator** on the Windows host. Elevation is used only so read-only Hyper-V, TPM, Secure Boot and feature queries can return complete results; the collector is statically guarded against host-configuration commands.
 
 ```powershell
 Set-Location <repository-root>
 ./scripts/host/Get-CUVMHostReadiness.ps1
 ```
 
-The collector writes a timestamped folder under:
+The collector writes a timestamped folder under the local, non-roaming application-data path:
 
 ```text
-Documents\CU-VM-GateA\
+%LOCALAPPDATA%\CU-VM\GateA\
 ```
+
+Use `-OutputRoot` only when you deliberately choose another private location.
 
 It produces:
 
@@ -53,7 +55,7 @@ Required output:
 3. Hyper-V capability/status;
 4. Secure Boot and TPM status;
 5. existing VM/switch/NAT conflicts;
-6. VPN/route conflicts;
+6. VPN/address/route conflicts;
 7. non-overlapping Gate B NAT subnet proposal;
 8. assumptions disproved;
 9. revised risks or config changes required.
