@@ -1,7 +1,7 @@
 #requires -Version 7.0
 [CmdletBinding()]
 param(
-    [string]$OutputRoot = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CU-VM\\GateA')
+    [string]$OutputRoot = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CU-VM\GateA')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -101,21 +101,26 @@ $physicalDisks = Invoke-ReadOnlyQuery -Name 'PhysicalDisks' -ScriptBlock {
 }
 
 $hyperVFeature = Invoke-ReadOnlyQuery -Name 'HyperVFeature' -ScriptBlock {
+    $feature = $null
     if (Get-Command -Name Get-WindowsOptionalFeature -ErrorAction SilentlyContinue) {
-        $feature = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All
-        [pscustomobject]@{
-            FeatureName = $feature.FeatureName
-            State       = [string]$feature.State
+        try {
+            $feature = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-All
+            return [pscustomobject]@{
+                FeatureName = $feature.FeatureName
+                State       = [string]$feature.State
+            }
+        }
+        catch {
+            $feature = $null
         }
     }
-    else {
-        $feature = Get-CimInstance -ClassName Win32_OptionalFeature |
-            Where-Object Name -eq 'Microsoft-Hyper-V-All' |
-            Select-Object -First 1
-        [pscustomobject]@{
-            FeatureName = $feature.Name
-            State       = [string]$feature.InstallState
-        }
+
+    $feature = Get-CimInstance -ClassName Win32_OptionalFeature |
+        Where-Object Name -eq 'Microsoft-Hyper-V-All' |
+        Select-Object -First 1
+    [pscustomobject]@{
+        FeatureName = $feature.Name
+        State       = [string]$feature.InstallState
     }
 }
 
@@ -192,6 +197,18 @@ $networkAdapters = Invoke-ReadOnlyQuery -Name 'NetworkAdapters' -ScriptBlock {
     })
 }
 
+$ipAddresses = Invoke-ReadOnlyQuery -Name 'IPv4Addresses' -ScriptBlock {
+    @(Get-NetIPAddress -AddressFamily IPv4 | ForEach-Object {
+        [pscustomobject]@{
+            IPAddress      = $_.IPAddress
+            PrefixLength   = [int]$_.PrefixLength
+            InterfaceAlias = $_.InterfaceAlias
+            InterfaceIndex = [int]$_.InterfaceIndex
+            AddressState   = [string]$_.AddressState
+        }
+    })
+}
+
 $vpnConnections = Invoke-ReadOnlyQuery -Name 'VpnConnections' -ScriptBlock {
     if (-not (Get-Command -Name Get-VpnConnection -ErrorAction SilentlyContinue)) {
         throw 'Get-VpnConnection is unavailable.'
@@ -240,6 +257,7 @@ $raw = [ordered]@{
     VirtualSwitches       = $virtualSwitches
     NetNat                = $natObjects
     NetworkAdapters       = $networkAdapters
+    IPv4Addresses         = $ipAddresses
     VpnConnections        = $vpnConnections
     IPv4Routes            = $routes
 }
@@ -256,6 +274,7 @@ $vmData = @($hyperVVMs.Data)
 $switchData = @($virtualSwitches.Data)
 $natData = @($natObjects.Data)
 $adapterData = @($networkAdapters.Data)
+$ipAddressData = @($ipAddresses.Data)
 $vpnData = @($vpnConnections.Data)
 $routeData = @($routes.Data)
 
@@ -318,6 +337,7 @@ $sanitized = [ordered]@{
     Network               = [ordered]@{
         AdapterCount       = $adapterData.Count
         ConnectedAdapters  = @($adapterData | Where-Object Status -eq 'Up').Count
+        IPv4AddressCount    = $ipAddressData.Count
         VpnConnectionCount = $vpnData.Count
         IPv4RouteCount     = $routeData.Count
         DefaultRouteCount  = @($routeData | Where-Object DestinationPrefix -eq '0.0.0.0/0').Count
