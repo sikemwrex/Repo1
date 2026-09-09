@@ -25,6 +25,7 @@ function Invoke-Scenario {
         [string]$AdapterSwitch = 'CU-NAT',
         [bool]$GuestServiceEnabled = $false,
         [switch]$MissingDeclaredCheckpoints,
+        [ValidateSet('Ordered','Misordered','Branched','MissingParent')][string]$CheckpointLineage = 'Ordered',
         [switch]$AllowNotAssessed,
         [string]$ExpectedOutputContains,
         [Parameter(Mandatory)][int]$ExpectedExitCode
@@ -57,22 +58,48 @@ function Get-VHD {
 "@
     }
 
-    $snapshotFunction = if ($MissingDeclaredCheckpoints) {
-@"
-function Get-VMSnapshot { [pscustomobject]@{ Name='03-COMPUTER-USE-VERIFIED' } }
-"@
+    $snapshotRows = if ($MissingDeclaredCheckpoints) {
+        "        [pscustomobject]@{ Name='03-COMPUTER-USE-VERIFIED'; Id=[guid]'00000000-0000-0000-0000-000000000004' }"
     } else {
 @"
-function Get-VMSnapshot {
-    @(
-        [pscustomobject]@{ Name='00-WIN11-CLEAN' },
-        [pscustomobject]@{ Name='01-WIN11-HARDENED' },
-        [pscustomobject]@{ Name='02-CHATGPT-INSTALLED' },
-        [pscustomobject]@{ Name='03-COMPUTER-USE-VERIFIED' }
-    )
-}
+        [pscustomobject]@{ Name='00-WIN11-CLEAN'; Id=[guid]'00000000-0000-0000-0000-000000000001' },
+        [pscustomobject]@{ Name='01-WIN11-HARDENED'; Id=[guid]'00000000-0000-0000-0000-000000000002' },
+        [pscustomobject]@{ Name='02-CHATGPT-INSTALLED'; Id=[guid]'00000000-0000-0000-0000-000000000003' },
+        [pscustomobject]@{ Name='03-COMPUTER-USE-VERIFIED'; Id=[guid]'00000000-0000-0000-0000-000000000004' }
 "@
     }
+
+    $parentMapLiteral = switch ($CheckpointLineage) {
+        'Ordered' { "'01-WIN11-HARDENED'='00-WIN11-CLEAN';'02-CHATGPT-INSTALLED'='01-WIN11-HARDENED';'03-COMPUTER-USE-VERIFIED'='02-CHATGPT-INSTALLED'" }
+        'Misordered' { "'01-WIN11-HARDENED'='00-WIN11-CLEAN';'02-CHATGPT-INSTALLED'='00-WIN11-CLEAN';'03-COMPUTER-USE-VERIFIED'='02-CHATGPT-INSTALLED'" }
+        'Branched' { "'01-WIN11-HARDENED'='00-WIN11-CLEAN';'02-CHATGPT-INSTALLED'='01-WIN11-HARDENED';'03-COMPUTER-USE-VERIFIED'='01-WIN11-HARDENED'" }
+        'MissingParent' { '' }
+    }
+
+    $snapshotFunction = @"
+`$snapshots = @(
+$snapshotRows
+)
+`$parentMap = @{$parentMapLiteral}
+
+function Get-VMSnapshot {
+    [CmdletBinding(DefaultParameterSetName='All')]
+    param(
+        [Parameter(ParameterSetName='All')][string[]]`$VMName,
+        [Parameter(ParameterSetName='Parent',Mandatory)][object]`$ParentOf,
+        [string]`$Name
+    )
+
+    if (`$PSCmdlet.ParameterSetName -eq 'Parent') {
+        `$parentName = `$parentMap[[string]`$ParentOf.Name]
+        if (-not `$parentName) { return }
+        return `$snapshots | Where-Object Name -eq `$parentName
+    }
+
+    if (`$Name) { return `$snapshots | Where-Object Name -eq `$Name }
+    return `$snapshots
+}
+"@
 
     $child = @"
 function Get-VM { [pscustomobject]@{ Name='CU-VM01'; Generation=2; MemoryStartup=8GB; DynamicMemoryEnabled=`$false } }
@@ -104,6 +131,9 @@ exit `$LASTEXITCODE
 Invoke-Scenario -Name 'Compliant base VHD, interim diagnostic explicitly allowed' -AllowNotAssessed -ExpectedExitCode 0
 Invoke-Scenario -Name 'Golden checkpoint differencing chain is rooted in declared base VHD' -UseDifferencingChain -AllowNotAssessed -ExpectedExitCode 0
 Invoke-Scenario -Name 'Missing declared recovery checkpoints fail even in diagnostic mode' -MissingDeclaredCheckpoints -AllowNotAssessed -ExpectedOutputContains 'Missing required checkpoint(s)' -ExpectedExitCode 1
+Invoke-Scenario -Name 'Misordered declared checkpoint lineage fails' -CheckpointLineage 'Misordered' -AllowNotAssessed -ExpectedOutputContains 'Checkpoint recovery lineage' -ExpectedExitCode 1
+Invoke-Scenario -Name 'Branched declared checkpoint lineage fails' -CheckpointLineage 'Branched' -AllowNotAssessed -ExpectedOutputContains 'Checkpoint recovery lineage' -ExpectedExitCode 1
+Invoke-Scenario -Name 'Missing immediate checkpoint parent fails' -CheckpointLineage 'MissingParent' -AllowNotAssessed -ExpectedOutputContains 'Checkpoint recovery lineage' -ExpectedExitCode 1
 Invoke-Scenario -Name 'Incomplete final assessment fails closed' -ExpectedExitCode 2
 Invoke-Scenario -Name 'vCPU drift fails' -ProcessorCount 2 -AllowNotAssessed -ExpectedExitCode 1
 Invoke-Scenario -Name 'Base VHD type drift fails' -RootVhdType 'Fixed' -AllowNotAssessed -ExpectedExitCode 1
