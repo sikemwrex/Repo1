@@ -1,0 +1,71 @@
+name: Trusted Validator Meta Gate
+
+# Runs from the base branch with read-only permissions so a candidate PR cannot
+# redefine the oracle that judges its validator change.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  trusted-lineage-oracle:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify same-repository candidate
+        shell: pwsh
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          TARGET_REPO: ${{ github.repository }}
+        run: |
+          if ($env:HEAD_REPO -ne $env:TARGET_REPO) {
+            Write-Error "Trusted meta gate refuses to execute fork-supplied candidate code."
+            exit 1
+          }
+
+      - name: Checkout trusted base
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+
+      - name: Checkout exact candidate head
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+
+      - name: Verify trusted and candidate revisions
+        shell: pwsh
+        env:
+          TRUSTED_SHA: ${{ github.event.pull_request.base.sha }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $trustedActual = (git -C trusted rev-parse HEAD).Trim()
+          $candidateActual = (git -C candidate rev-parse HEAD).Trim()
+          if ($trustedActual -ne $env:TRUSTED_SHA) {
+            Write-Error "Trusted checkout $trustedActual; required $env:TRUSTED_SHA"
+            exit 1
+          }
+          if ($candidateActual -ne $env:CANDIDATE_SHA) {
+            Write-Error "Candidate checkout $candidateActual; required $env:CANDIDATE_SHA"
+            exit 1
+          }
+          "Trusted base revision: $trustedActual" | Write-Output
+          "Candidate revision: $candidateActual" | Write-Output
+
+      - name: Self-test trusted oracle
+        shell: pwsh
+        run: ./trusted/tests/trusted/Test-CheckpointLineageOracle.ps1 -SelfTest
+
+      - name: Judge candidate validator with trusted-base oracle
+        shell: pwsh
+        run: |
+          ./trusted/tests/trusted/Test-CheckpointLineageOracle.ps1 `
+            -CandidateValidatorPath ./candidate/scripts/validation/Test-CUVMCompliance.ps1 `
+            -TrustedConfigPath ./trusted/config/vm-spec.psd1
