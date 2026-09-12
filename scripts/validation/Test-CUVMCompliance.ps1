@@ -36,11 +36,11 @@ $processor = Get-VMProcessor -VMName $VMName
 if ($processor.Count -eq $config.Compute.ProcessorCount) { Add-Result 'vCPU baseline' 'PASS' "$($processor.Count) vCPU" } else { Add-Result 'vCPU baseline' 'FAIL' "$($processor.Count) vCPU; expected $($config.Compute.ProcessorCount)" }
 
 $expectedStartupBytes = [int64]$config.Compute.StartupMemoryGB * 1GB
-if ($vm.MemoryStartup -eq $expectedStartupBytes) { Add-Result 'Startup memory' 'PASS' "$($config.Compute.StartupMemoryGB) GB" } else { Add-Result 'Startup memory' 'FAIL' "$([math]::Round($vm.MemoryStartup / 1GB,2)) GB; expected $($config.Compute.StartupMemoryGB) GB" }
+if ($vm.MemoryStartup -eq $expectedStartupBytes) { Add-Result 'Startup memory' 'PASS' "$($config.Compute.StartupMemoryGB) GB" } else { Add-Result 'Startup memory' 'FAIL' "$([math]::Round($vm.MemoryStartup/1GB,2)) GB; expected $($config.Compute.StartupMemoryGB) GB" }
 
 $dynamicMemoryEnabled = [bool]$vm.DynamicMemoryEnabled
 $dynamicMemoryExpected = [bool]$config.Compute.DynamicMemory
-if ($dynamicMemoryEnabled -eq $dynamicMemoryExpected) { Add-Result 'Dynamic memory mode' 'PASS' "Enabled=$dynamicMemoryEnabled" } else { Add-Result 'Dynamic memory mode' 'FAIL' "Enabled=$dynamicMemoryEnabled; expected $dynamicMemoryExpected" }
+if ($dynamicMemoryEnabled -eq $dynamicMemoryExpected) { Add-Result 'Dynamic memory mode' 'PASS' "Enabled=$dynamicMemoryEnabled" } else { Add-Result 'Dynamic memory mode' 'FAIL' "Enabled=$dynamicMemoryEnabled; expected Enabled=$dynamicMemoryExpected" }
 
 $disks = @(Get-VMHardDiskDrive -VMName $VMName)
 if ($disks.Count -ne 1) {
@@ -120,26 +120,26 @@ if ($disks.Count -ne 1) {
 
 $firmware = Get-VMFirmware -VMName $VMName
 $secureBootEnabled = $firmware.SecureBoot -eq 'On'
-if ($secureBootEnabled -eq [bool]$config.Firmware.SecureBoot) { Add-Result 'Secure Boot' 'PASS' "Enabled=$secureBootEnabled" } else { Add-Result 'Secure Boot' 'FAIL' "Enabled=$secureBootEnabled; expected $($config.Firmware.SecureBoot)" }
+if ($secureBootEnabled -eq [bool]$config.Firmware.SecureBoot) { Add-Result 'Secure Boot' 'PASS' "Enabled=$secureBootEnabled" } else { Add-Result 'Secure Boot' 'FAIL' "Enabled=$secureBootEnabled; expected Enabled=$([bool]$config.Firmware.SecureBoot)" }
 
 $security = Get-VMSecurity -VMName $VMName
-if ([bool]$security.TpmEnabled -eq [bool]$config.Firmware.VirtualTPM) { Add-Result 'Virtual TPM' 'PASS' "Enabled=$($security.TpmEnabled)" } else { Add-Result 'Virtual TPM' 'FAIL' "Enabled=$($security.TpmEnabled); expected $($config.Firmware.VirtualTPM)" }
+if ([bool]$security.TpmEnabled -eq [bool]$config.Firmware.VirtualTPM) { Add-Result 'Virtual TPM' 'PASS' "Enabled=$($security.TpmEnabled)" } else { Add-Result 'Virtual TPM' 'FAIL' "Enabled=$($security.TpmEnabled); expected Enabled=$([bool]$config.Firmware.VirtualTPM)" }
 
 $guestService = Get-VMIntegrationService -VMName $VMName -Name 'Guest Service Interface' -ErrorAction SilentlyContinue
 $guestServiceExpectedEnabled = [bool]$config.Isolation.GuestServicesFileCopy
 if ($guestService) {
-    if ([bool]$guestService.Enabled -eq $guestServiceExpectedEnabled) { Add-Result 'Guest Services file copy' 'PASS' "Enabled=$($guestService.Enabled)" } else { Add-Result 'Guest Services file copy' 'FAIL' "Enabled=$($guestService.Enabled); expected $guestServiceExpectedEnabled" }
+    if ([bool]$guestService.Enabled -eq $guestServiceExpectedEnabled) { Add-Result 'Guest Services file copy' 'PASS' "Enabled=$($guestService.Enabled)" } else { Add-Result 'Guest Services file copy' 'FAIL' "Enabled=$($guestService.Enabled); expected Enabled=$guestServiceExpectedEnabled" }
 } else { Add-Result 'Guest Services file copy' 'NOT-ASSESSED' 'Integration service not returned' }
 
 $adapters = @(Get-VMNetworkAdapter -VMName $VMName)
 if ($adapters.Count -eq 1) {
-    if ($adapters[0].SwitchName -eq $config.Network.SwitchName) { Add-Result 'Network attachment' 'PASS' "1 adapter on '$($adapters[0].SwitchName)'" } else { Add-Result 'Network attachment' 'FAIL' "Adapter attached to '$($adapters[0].SwitchName)'; expected '$($config.Network.SwitchName)'" }
+    if ($adapters[0].SwitchName -eq $config.Network.SwitchName) { Add-Result 'Network attachment' 'PASS' "1 adapter on '$($adapters[0].SwitchName)'" } else { Add-Result 'Network attachment' 'FAIL' "adapter on '$($adapters[0].SwitchName)'; expected '$($config.Network.SwitchName)'" }
 } else { Add-Result 'Network attachment' 'FAIL' "$($adapters.Count) adapters detected; expected exactly 1" }
 
 try {
     $switch = Get-VMSwitch -Name $config.Network.SwitchName -ErrorAction Stop
     if ($config.Network.Mode -eq 'InternalNAT') {
-        if ($switch.SwitchType -eq 'Internal') { Add-Result 'Virtual switch type' 'PASS' 'Internal' } else { Add-Result 'Virtual switch type' 'FAIL' "$($switch.SwitchType); expected Internal for InternalNAT" }
+        if ($switch.SwitchType -eq 'Internal') { Add-Result 'Virtual switch type' 'PASS' 'Internal' } else { Add-Result 'Virtual switch type' 'FAIL' "$($switch.SwitchType); expected Internal for InternalNAT mode" }
     } else {
         Add-Result 'Virtual switch type' 'NOT-ASSESSED' "Network mode '$($config.Network.Mode)' has no runtime switch-type rule"
     }
