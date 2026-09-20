@@ -61,4 +61,14 @@ Repository privacy and GitHub Issues capability remain pre-build governance item
 
 ## Current phase
 
-**Architecture / pre-build governance.** No host changes are authorised by repository content alone. The next operational stage is Gate A: read-only host readiness assessment.
+**Gate A executable / pre-Gate B.** Exact `main` (`05985cff`) passed PowerShell Quality #60. The Gate A collector and smoke/read-only guards are on `main`. No host virtualization change is authorised by repository content alone.
+
+Next authorized host action:
+
+```powershell
+Set-Location <repository-root>
+./scripts/host/Get-CUVMHostReadiness.ps1
+./scripts/hyperv/Get-CUVMBuildPlan.ps1
+```
+
+Do not create `CU-VM01` until Gate A raw evidence has selected a non-overlapping NAT subnet and a reviewed Gate B change exists.

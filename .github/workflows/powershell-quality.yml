@@ -123,6 +123,10 @@ jobs:
         shell: pwsh
         run: ./tests/static/Test-VMConfigContract.ps1
 
+      - name: Read-only build plan guard
+        shell: pwsh
+        run: ./tests/static/Test-BuildPlanReadOnly.ps1
+
       - name: Static compliance structure guard
         shell: pwsh
         run: ./tests/static/Test-ComplianceCoverage.ps1
