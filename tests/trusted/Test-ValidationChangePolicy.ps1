@@ -9,10 +9,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-function Normalize-ChangedFiles {
-    param([string[]]$Files)
+# Bind script parameters outside the nested oracle scriptblock.
+# PSScriptAnalyzer does not treat closure captures as parameter uses.
+$boundCandidateValidatorPath = $CandidateValidatorPath
+$boundTrustedConfigPath = $TrustedConfigPath
+$boundTrustedLineageOraclePath = $TrustedLineageOraclePath
+
+function ConvertTo-NormalizedChangedFile {
+    param([string[]]$File)
     return @(
-        $Files |
+        $File |
         Where-Object { $_ } |
         ForEach-Object { ([string]$_).Replace('\','/').TrimStart('./') } |
         Sort-Object -Unique
@@ -25,7 +31,7 @@ function Invoke-ValidationChangePolicy {
         [Parameter(Mandatory)][scriptblock]$LineageOracle
     )
 
-    $normalized = Normalize-ChangedFiles -Files $Files
+    $normalized = ConvertTo-NormalizedChangedFile -File $Files
     $implementation = @($normalized | Where-Object { $_ -like 'scripts/*' -or $_ -like 'config/*' })
     $harness = @($normalized | Where-Object { $_ -like 'tests/*' -or $_ -like '.github/workflows/*' })
 
@@ -121,16 +127,16 @@ if (-not $ChangedFiles -or $ChangedFiles.Count -eq 0) {
     throw 'ChangedFiles is required unless -SelfTest is used.'
 }
 
-$normalizedInput = Normalize-ChangedFiles -Files $ChangedFiles
+$normalizedInput = ConvertTo-NormalizedChangedFile -File $ChangedFiles
 
 $realOracle = {
-    if (-not $CandidateValidatorPath) { throw 'CandidateValidatorPath is required when the production compliance validator changes.' }
-    if (-not $TrustedConfigPath) { throw 'TrustedConfigPath is required when the production compliance validator changes.' }
-    if (-not (Test-Path -LiteralPath $TrustedLineageOraclePath)) { throw "Trusted lineage oracle not found: $TrustedLineageOraclePath" }
+    if (-not $boundCandidateValidatorPath) { throw 'CandidateValidatorPath is required when the production compliance validator changes.' }
+    if (-not $boundTrustedConfigPath) { throw 'TrustedConfigPath is required when the production compliance validator changes.' }
+    if (-not (Test-Path -LiteralPath $boundTrustedLineageOraclePath)) { throw "Trusted lineage oracle not found: $boundTrustedLineageOraclePath" }
 
-    & $TrustedLineageOraclePath `
-        -CandidateValidatorPath $CandidateValidatorPath `
-        -TrustedConfigPath $TrustedConfigPath
+    & $boundTrustedLineageOraclePath `
+        -CandidateValidatorPath $boundCandidateValidatorPath `
+        -TrustedConfigPath $boundTrustedConfigPath
     if ($LASTEXITCODE -ne 0) {
         throw "Trusted lineage oracle failed with exit code $LASTEXITCODE"
     }
