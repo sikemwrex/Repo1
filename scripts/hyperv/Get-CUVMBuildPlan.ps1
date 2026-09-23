@@ -21,13 +21,14 @@ if ([string]::IsNullOrWhiteSpace([string]$config.Network.Subnet)) {
 
 $creatorPath = Join-Path $PSScriptRoot 'New-CUVM.ps1'
 if (-not (Test-Path -LiteralPath $creatorPath)) {
-    $blockers.Add('No reviewed New-CUVM.ps1 exists. Gate B implementation is not present in this revision.')
+    $blockers.Add('Reviewed creator is missing: New-CUVM.ps1 is not present in this revision.')
 }
 
 $plan = [ordered]@{
     SchemaVersion = '1.0'
     Mode = 'ReadOnlyPlan'
     ImplementationAuthorized = $false
+    AuthorizationStatus = 'NOT AUTHORIZED'
     VMName = $config.VMName
     Generation = $config.Generation
     ProcessorCount = $config.Compute.ProcessorCount
@@ -39,17 +40,11 @@ $plan = [ordered]@{
     SwitchName = $config.Network.SwitchName
     NetworkMode = $config.Network.Mode
     SubnetResolved = -not [string]::IsNullOrWhiteSpace([string]$config.Network.Subnet)
+    ReviewedCreatorPresent = Test-Path -LiteralPath $creatorPath
     DeclaredCheckpoints = @($config.Checkpoints)
     NextAuthorizedHostAction = 'Run Gate A read-only collector on the Windows host: ./scripts/host/Get-CUVMHostReadiness.ps1'
     Blockers = @($blockers)
 }
 
 $plan | ConvertTo-Json -Depth 6 | Write-Output
-
-if ($blockers.Count -gt 0) {
-    Write-Output 'CU-VM01 build plan: NOT AUTHORIZED'
-    exit 0
-}
-
-Write-Output 'CU-VM01 build plan: AUTHORIZED'
 exit 0
