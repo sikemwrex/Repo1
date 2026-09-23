@@ -71,4 +71,6 @@ Set-Location <repository-root>
 ./scripts/hyperv/Get-CUVMBuildPlan.ps1
 ```
 
+`Get-CUVMBuildPlan.ps1` is read-only JSON reporting only. Its current revision always reports `ImplementationAuthorized: false` and identifies the unresolved `Network.Subnet` plus missing reviewed creator blockers. It does not create or mutate any VM, switch, NAT, Hyper-V feature, checkpoint, or network state.
+
 Do not create `CU-VM01` until Gate A raw evidence has selected a non-overlapping NAT subnet and a reviewed Gate B change exists.

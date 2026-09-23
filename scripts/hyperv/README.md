@@ -4,8 +4,9 @@ Automation in this directory creates and manages only project-owned Hyper-V reso
 
 ## Current revision
 - `Get-CUVMBuildPlan.ps1` is the only executable Hyper-V script. It is **R0 / read-only**.
-- It prints the declared `CU-VM01` plan from `config/vm-spec.psd1` and states whether implementation is authorized.
-- Implementation stays unauthorized while `Network.Subnet` is unresolved and while no reviewed `New-CUVM.ps1` exists.
+- It emits the declared `CU-VM01` plan from `config/vm-spec.psd1` as JSON.
+- The current revision always reports `ImplementationAuthorized: false`; it identifies the unresolved `Network.Subnet` and missing reviewed creator blockers.
+- This revision contains no VM, switch, NAT, Hyper-V feature, checkpoint, or network mutation behavior.
 
 ## Expected later responsibilities
 - create/update `CU-NAT` internal switch and project NAT configuration
