@@ -61,7 +61,7 @@ Repository privacy and GitHub Issues capability remain pre-build governance item
 
 ## Current phase
 
-**Gate A executable / pre-Gate B.** Exact `main` (`05985cff`) passed PowerShell Quality #60. The Gate A collector and smoke/read-only guards are on `main`. No host virtualization change is authorised by repository content alone.
+**Gate A executable / pre-Gate B.** Exact `main` (`e81daaac2d9661a4d109b6dd8db7cb72823f0836`) passed PowerShell Quality #65 (attempt 2) successfully on that SHA. The Gate A collector and smoke/read-only guards are on `main`. No host virtualization change is authorised by repository content alone.
 
 Next authorized host action:
 
