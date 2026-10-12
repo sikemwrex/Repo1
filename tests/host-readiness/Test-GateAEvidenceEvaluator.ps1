@@ -186,7 +186,8 @@ Get-Date | Out-Null
 
     $valid = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
     if ($valid.ExitCode -ne 0 -or $valid.Output.Verdict -ne 'READY_FOR_OWNER_DECISION') {
-        throw "Expected fresh non-overlapping evidence to pass. Exit=$($valid.ExitCode) Error=$($valid.StandardError)"
+        $detail = if ($valid.Output) { $valid.Output | ConvertTo-Json -Depth 20 -Compress } else { '<no JSON output>' }
+        throw "Expected fresh non-overlapping evidence to pass. Exit=$($valid.ExitCode) Error=$($valid.StandardError) Output=$detail"
     }
     if ($valid.Output.Authorization.GateAClosed -or $valid.Output.Authorization.GateBImplementationAuthorized) {
         throw 'Evaluator must never close Gate A or authorize Gate B.'
