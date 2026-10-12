@@ -75,4 +75,50 @@ if ($missingQueries.Count -gt 0) {
     throw "Gate A collector is missing required read-only query coverage: $($missingQueries -join ', ')"
 }
 
-Write-Output 'Gate A collector read-only static guard: PASS'
+$evaluator = Join-Path $PSScriptRoot '..\..\scripts\host\Test-CUVMGateAEvidence.ps1'
+if (-not (Test-Path -LiteralPath $evaluator)) {
+    throw "Gate A evidence evaluator not found: $evaluator"
+}
+
+$evaluatorTokens = $null
+$evaluatorParseErrors = $null
+$evaluatorAst = [System.Management.Automation.Language.Parser]::ParseFile(
+    (Resolve-Path -LiteralPath $evaluator).Path,
+    [ref]$evaluatorTokens,
+    [ref]$evaluatorParseErrors
+)
+
+if ($evaluatorParseErrors.Count -gt 0) {
+    throw "Gate A evidence evaluator has syntax errors: $($evaluatorParseErrors -join '; ')"
+}
+
+$evaluatorCommands = @(
+    $evaluatorAst.FindAll(
+        {
+            param($node)
+            $node -is [System.Management.Automation.Language.CommandAst]
+        },
+        $true
+    ) |
+        ForEach-Object { $_.GetCommandName() } |
+        Where-Object { $_ } |
+        Sort-Object -Unique
+)
+
+$evaluatorViolations = @(
+    $evaluatorCommands |
+        Where-Object { $_ -match $stateChangingPattern }
+)
+
+if ($evaluatorViolations.Count -gt 0) {
+    throw "Gate A evidence evaluator read-only boundary violated by state-changing command(s): $($evaluatorViolations -join ', ')"
+}
+
+$regression = Join-Path $PSScriptRoot 'Test-GateAEvidenceEvaluator.ps1'
+if (-not (Test-Path -LiteralPath $regression)) {
+    throw "Gate A evidence evaluator regression not found: $regression"
+}
+
+& $regression
+
+Write-Output 'Gate A collector and evidence evaluator read-only guards: PASS'
