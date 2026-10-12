@@ -68,12 +68,58 @@ Get-Date | Out-Null
         $collectorHash = (Get-FileHash -LiteralPath $collectorPath -Algorithm SHA256).Hash
         $evidenceId = [guid]::NewGuid().Guid
 
+        $totalPhysicalMemory = [int64](16GB)
+        $freePhysicalMemoryKiB = [int64]([math]::Round(($AvailableMemoryGB * 1GB) / 1KB))
+        $vpnEntries = @(
+            1..$VpnConnectionCount | ForEach-Object {
+                [ordered]@{
+                    Name             = "VPN-$($_)"
+                    ConnectionStatus = 'Disconnected'
+                    SplitTunneling   = $false
+                    TunnelType       = 'Ikev2'
+                }
+            }
+        )
+
         $raw = [ordered]@{
             EvidenceSchemaVersion = '1.0'
             EvidenceId = $evidenceId
             CapturedAt = $CapturedAt.ToString('o')
             CollectorSha256 = $collectorHash
             ReadOnlyGate = 'Gate A'
+            OperatingSystem = [ordered]@{
+                Available = $true
+                Data = [ordered]@{
+                    Caption = 'Microsoft Windows 11 Pro'
+                    Version = '10.0.26300'
+                    BuildNumber = '26300'
+                    OSArchitecture = '64-bit'
+                    FreePhysicalMemoryKiB = $freePhysicalMemoryKiB
+                    TotalVisibleMemoryKiB = [int64](16GB / 1KB)
+                }
+            }
+            ComputerSystem = [ordered]@{
+                Available = $true
+                Data = [ordered]@{
+                    Manufacturer = 'Synthetic'
+                    Model = 'Gate-A-Test'
+                    TotalPhysicalMemory = $totalPhysicalMemory
+                    HypervisorPresent = $true
+                }
+            }
+            Processor = [ordered]@{
+                Available = $true
+                Data = @(
+                    [ordered]@{
+                        Name = 'Synthetic CPU'
+                        NumberOfCores = 4
+                        NumberOfLogicalProcessors = 8
+                        VirtualizationFirmwareEnabled = $true
+                        VMMonitorModeExtensions = $true
+                        SecondLevelAddressTranslationExtensions = $true
+                    }
+                )
+            }
             Volumes = [ordered]@{
                 Available = $true
                 Data = @(
@@ -85,6 +131,39 @@ Get-Date | Out-Null
                         HealthStatus = 'Healthy'
                     }
                 )
+            }
+            PhysicalDisks = [ordered]@{
+                Available = $true
+                Data = @(
+                    [ordered]@{
+                        FriendlyName = 'Synthetic Disk'
+                        MediaType = 'SSD'
+                        BusType = 'NVMe'
+                        Size = 500GB
+                        HealthStatus = 'Healthy'
+                    }
+                )
+            }
+            HyperVFeature = [ordered]@{
+                Available = $true
+                Data = [ordered]@{
+                    FeatureName = 'Microsoft-Hyper-V-All'
+                    State = '1'
+                }
+            }
+            SecureBoot = [ordered]@{
+                Available = $true
+                Data = [ordered]@{ Enabled = $true }
+            }
+            TPM = [ordered]@{
+                Available = $true
+                Data = [ordered]@{
+                    TpmPresent = $true
+                    TpmReady = $true
+                    TpmEnabled = $true
+                    TpmActivated = $true
+                    AutoProvisioning = 'Enabled'
+                }
             }
             HyperVVMs = [ordered]@{
                 Available = $true
@@ -109,6 +188,35 @@ Get-Date | Out-Null
                 Available = $true
                 Data = @()
             }
+            NetworkAdapters = [ordered]@{
+                Available = $true
+                Data = @(
+                    [ordered]@{
+                        Name = 'Ethernet'
+                        InterfaceDescription = 'Synthetic Adapter'
+                        InterfaceIndex = 7
+                        Status = 'Up'
+                        LinkSpeed = '1 Gbps'
+                        Virtual = $false
+                    }
+                )
+            }
+            IPv4Addresses = [ordered]@{
+                Available = $true
+                Data = @(
+                    [ordered]@{
+                        IPAddress = '192.168.1.60'
+                        PrefixLength = 24
+                        InterfaceAlias = 'Ethernet'
+                        InterfaceIndex = 7
+                        AddressState = 'Preferred'
+                    }
+                )
+            }
+            VpnConnections = [ordered]@{
+                Available = $true
+                Data = $vpnEntries
+            }
             IPv4Routes = [ordered]@{
                 Available = $true
                 Data = @(
@@ -132,8 +240,8 @@ Get-Date | Out-Null
             Hardware = [ordered]@{
                 PhysicalCores = 4
                 LogicalProcessors = 8
-                InstalledMemoryGB = 16.0
-                AvailableMemoryGB = $AvailableMemoryGB
+                InstalledMemoryGB = [math]::Round(($totalPhysicalMemory / 1GB), 2)
+                AvailableMemoryGB = [math]::Round((($freePhysicalMemoryKiB * 1KB) / 1GB), 2)
                 HypervisorPresent = $true
             }
             Security = [ordered]@{
@@ -151,7 +259,12 @@ Get-Date | Out-Null
                 ExistingNatCount = 0
             }
             Network = [ordered]@{
+                AdapterCount = 1
+                ConnectedAdapters = 1
+                IPv4AddressCount = 1
                 VpnConnectionCount = $VpnConnectionCount
+                IPv4RouteCount = $Routes.Count
+                DefaultRouteCount = @($Routes | Where-Object { $_ -eq '0.0.0.0/0' }).Count
             }
             QueryFailures = @()
         }
@@ -306,6 +419,51 @@ Get-Date | Out-Null
     $malformedRoute = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
     if ($malformedRoute.ExitCode -eq 0 -or $malformedRoute.Output.Verdict -ne 'BLOCKED') {
         throw 'Expected malformed captured route evidence to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        '0.0.0.0/0'
+    )
+    $sanitizedTampered = Get-Content -LiteralPath $sanitizedPath -Raw | ConvertFrom-Json -Depth 20
+    $sanitizedTampered.Hardware.AvailableMemoryGB = 64
+    $sanitizedTampered | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $sanitizedPath -Encoding utf8
+    $summaryTamper = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
+    if ($summaryTamper.ExitCode -eq 0 -or $summaryTamper.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected decision-critical sanitized-summary tampering to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        '0.0.0.0/0'
+    )
+    $publicSubnet = Invoke-CUEvaluatorCase -CandidateSubnet '8.8.8.0/24'
+    if ($publicSubnet.ExitCode -eq 0 -or $publicSubnet.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected non-RFC1918 candidate subnet to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '10.77.0.0/16',
+        '0.0.0.0/0'
+    )
+    $addressOverlap = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
+    if ($addressOverlap.ExitCode -eq 0 -or $addressOverlap.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected candidate overlap with captured topology to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        '0.0.0.0/0'
+    )
+    $rawMissingSection = Get-Content -LiteralPath $rawPath -Raw | ConvertFrom-Json -Depth 20
+    $rawMissingSection.PSObject.Properties.Remove('TPM')
+    $rawMissingSection | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $rawPath -Encoding utf8
+    $sanitizedForMissingSection = Get-Content -LiteralPath $sanitizedPath -Raw | ConvertFrom-Json -Depth 20
+    $sanitizedForMissingSection.RawEvidenceSha256 = (Get-FileHash -LiteralPath $rawPath -Algorithm SHA256).Hash
+    $sanitizedForMissingSection | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $sanitizedPath -Encoding utf8
+    $missingSection = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
+    if ($missingSection.ExitCode -eq 0 -or $missingSection.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected missing required raw evidence section to fail closed.'
     }
 
     Write-Output 'Gate A evidence evaluator behavioral regression: PASS'
