@@ -74,10 +74,12 @@ function Get-CUCidrRange {
     [uint64]$broadcast = ($network -bor ((-bnot $mask) -band [uint64]4294967295))
 
     [pscustomobject]@{
-        Cidr      = $Cidr
-        Prefix    = $prefix
-        Network   = $network
-        Broadcast = $broadcast
+        Cidr             = $Cidr
+        Prefix           = $prefix
+        Address          = [uint64]$address
+        Network          = $network
+        Broadcast        = $broadcast
+        IsNetworkAligned = ([uint64]$address -eq $network)
     }
 }
 
@@ -209,11 +211,11 @@ $startupInstalledReserveGB = $installedMemoryGB - $startupMemoryGB
 $preferredInstalledReserveGB = $installedMemoryGB - $preferredMemoryGB
 $startupViable = (
     $installedMemoryGB -ge ($startupMemoryGB + $MinimumHostReserveGB) -and
-    $availableMemoryGB -ge $startupMemoryGB
+    $availableMemoryGB -ge ($startupMemoryGB + $MinimumHostReserveGB)
 )
 $preferredViable = (
     $installedMemoryGB -ge ($preferredMemoryGB + $MinimumHostReserveGB) -and
-    $availableMemoryGB -ge $preferredMemoryGB
+    $availableMemoryGB -ge ($preferredMemoryGB + $MinimumHostReserveGB)
 )
 
 $checks.Memory = [ordered]@{
@@ -271,6 +273,18 @@ if (-not $checks.Storage.Viable) {
     $blockers.Add("No healthy fixed volume has at least $requiredStorageGB GB free for the declared VHD plus storage reserve.")
 }
 
+$existingVmNames = @(
+    $raw.HyperVVMs.Data |
+        ForEach-Object Name |
+        Where-Object { $_ }
+)
+$existingSwitches = @($raw.VirtualSwitches.Data)
+$vmNameConflict = ($config.VMName -in $existingVmNames)
+$targetSwitchConflicts = @(
+    $existingSwitches |
+        Where-Object { $_.Name -eq $config.Network.SwitchName }
+)
+
 $featureState = [string]$sanitized.HyperV.FeatureState
 $hyperVEnabled = $featureState -in @('1', 'Enabled')
 $checks.HyperV = [ordered]@{
@@ -281,9 +295,24 @@ $checks.HyperV = [ordered]@{
     ExistingVMCount       = [int]$sanitized.HyperV.ExistingVMCount
     ExistingSwitchCount   = [int]$sanitized.HyperV.ExistingSwitchCount
     ExistingNatCount      = [int]$sanitized.HyperV.ExistingNatCount
+    ExistingVMNames       = $existingVmNames
+    VMNameConflict        = $vmNameConflict
+    TargetSwitchName      = $config.Network.SwitchName
+    TargetSwitchConflicts = @($targetSwitchConflicts | ForEach-Object {
+        [pscustomobject]@{
+            Name       = $_.Name
+            SwitchType = $_.SwitchType
+        }
+    })
 }
 if (-not $checks.HyperV.HypervisorPresent -or -not $checks.HyperV.FeatureQueryAvailable -or -not $hyperVEnabled) {
     $blockers.Add('Hyper-V readiness is not established by the captured host evidence.')
+}
+if ($vmNameConflict) {
+    $blockers.Add("A VM named $($config.VMName) already exists and must be explicitly reconciled before Gate B.")
+}
+if ($targetSwitchConflicts.Count -gt 0) {
+    $blockers.Add("A virtual switch named $($config.Network.SwitchName) already exists and must be explicitly reconciled before Gate B.")
 }
 
 $checks.PlatformSecurity = [ordered]@{
@@ -314,7 +343,20 @@ if ([string]::IsNullOrWhiteSpace($CandidateSubnet)) {
 }
 else {
     try {
-        $null = Get-CUCidrRange -Cidr $CandidateSubnet
+        $candidateRange = Get-CUCidrRange -Cidr $CandidateSubnet
+        if (-not $candidateRange.IsNetworkAligned) {
+            throw "Candidate CIDR must identify the network address, not a host address: $CandidateSubnet"
+        }
+
+        $routeData = @($raw.IPv4Routes.Data)
+        $defaultRoutes = @(
+            $routeData |
+                Where-Object DestinationPrefix -eq '0.0.0.0/0'
+        )
+        if ($routeData.Count -eq 0 -or $defaultRoutes.Count -eq 0) {
+            throw 'Captured route evidence is incomplete: at least one IPv4 route and one default route are required.'
+        }
+
         $routePrefixes = @(
             $raw.IPv4Routes.Data |
                 ForEach-Object DestinationPrefix |
