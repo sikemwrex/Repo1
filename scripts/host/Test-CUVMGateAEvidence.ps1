@@ -397,15 +397,19 @@ else {
         }
 
         $subnetOverlaps = @($subnetOverlaps | Sort-Object -Unique)
+        $vpnCount = [int]$sanitized.Network.VpnConnectionCount
         $checks.Network = [ordered]@{
             CandidateSubnet = $CandidateSubnet
             Assessed        = $true
             Overlaps        = $subnetOverlaps
             NonOverlapping  = ($subnetOverlaps.Count -eq 0)
-            VpnCount        = [int]$sanitized.Network.VpnConnectionCount
+            VpnCount        = $vpnCount
         }
         if ($subnetOverlaps.Count -gt 0) {
             $blockers.Add("Candidate subnet $CandidateSubnet overlaps captured route/NAT prefix(es): $($subnetOverlaps -join ', ').")
+        }
+        if ($vpnCount -gt 0) {
+            $blockers.Add('Configured VPN connections are present. Their potential address spaces must be explicitly assessed before a Gate B NAT subnet can be approved.')
         }
     }
     catch {
