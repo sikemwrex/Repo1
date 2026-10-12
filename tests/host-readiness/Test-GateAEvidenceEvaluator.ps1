@@ -40,6 +40,7 @@ Get-Date | Out-Null
     }
     Network = @{
         Mode = 'InternalNAT'
+        SwitchName = 'CU-NAT'
         Subnet = $null
     }
 }
