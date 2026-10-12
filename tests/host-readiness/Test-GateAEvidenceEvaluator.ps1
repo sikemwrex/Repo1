@@ -62,6 +62,8 @@ Get-Date | Out-Null
 
             [string[]]$ExistingSwitchNames = @(),
 
+            [string[]]$ExistingNatPrefixes = @(),
+
             [int]$VpnConnectionCount = 0,
 
             [string]$IPv4Address = '192.168.1.60',
@@ -194,7 +196,14 @@ Get-Date | Out-Null
             }
             NetNat = [ordered]@{
                 Available = $true
-                Data = @()
+                Data = @(
+                    $ExistingNatPrefixes | ForEach-Object {
+                        [ordered]@{
+                            Name = 'ExistingNAT'
+                            InternalIPInterfaceAddressPrefix = $_
+                        }
+                    }
+                )
             }
             NetworkAdapters = [ordered]@{
                 Available = $true
@@ -264,7 +273,7 @@ Get-Date | Out-Null
                 FeatureState = '1'
                 ExistingVMCount = $ExistingVMNames.Count
                 ExistingSwitchCount = $ExistingSwitchNames.Count
-                ExistingNatCount = 0
+                ExistingNatCount = $ExistingNatPrefixes.Count
             }
             Network = [ordered]@{
                 AdapterCount = 1
@@ -408,6 +417,15 @@ Get-Date | Out-Null
     $missingRoutes = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
     if ($missingRoutes.ExitCode -eq 0 -or $missingRoutes.Output.Verdict -ne 'BLOCKED') {
         throw 'Expected missing route evidence to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        '0.0.0.0/0'
+    ) -ExistingNatPrefixes @('172.20.0.0/16')
+    $existingNat = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
+    if ($existingNat.ExitCode -eq 0 -or $existingNat.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected any existing WinNAT configuration to require explicit reconciliation.'
     }
 
     Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
