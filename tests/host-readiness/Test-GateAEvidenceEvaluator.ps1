@@ -75,8 +75,9 @@ Get-Date | Out-Null
 
         $totalPhysicalMemory = [int64](16GB)
         $freePhysicalMemoryKiB = [int64]([math]::Round(($AvailableMemoryGB * 1GB) / 1KB))
-        $vpnEntries = if ($VpnConnectionCount -gt 0) {
-            @(
+        [object[]]$vpnEntries = @()
+        if ($VpnConnectionCount -gt 0) {
+            $vpnEntries = @(
                 1..$VpnConnectionCount | ForEach-Object {
                     [ordered]@{
                         Name             = "VPN-$($_)"
@@ -86,9 +87,6 @@ Get-Date | Out-Null
                     }
                 }
             )
-        }
-        else {
-            @()
         }
 
         $raw = [ordered]@{
