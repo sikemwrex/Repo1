@@ -70,16 +70,21 @@ Get-Date | Out-Null
 
         $totalPhysicalMemory = [int64](16GB)
         $freePhysicalMemoryKiB = [int64]([math]::Round(($AvailableMemoryGB * 1GB) / 1KB))
-        $vpnEntries = @(
-            1..$VpnConnectionCount | ForEach-Object {
-                [ordered]@{
-                    Name             = "VPN-$($_)"
-                    ConnectionStatus = 'Disconnected'
-                    SplitTunneling   = $false
-                    TunnelType       = 'Ikev2'
+        $vpnEntries = if ($VpnConnectionCount -gt 0) {
+            @(
+                1..$VpnConnectionCount | ForEach-Object {
+                    [ordered]@{
+                        Name             = "VPN-$($_)"
+                        ConnectionStatus = 'Disconnected'
+                        SplitTunneling   = $false
+                        TunnelType       = 'Ikev2'
+                    }
                 }
-            }
-        )
+            )
+        }
+        else {
+            @()
+        }
 
         $raw = [ordered]@{
             EvidenceSchemaVersion = '1.0'
