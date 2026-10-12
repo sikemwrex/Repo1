@@ -40,8 +40,40 @@ The GitHub repository is public.
 
 The raw file may be provided directly for Gate A analysis or stored in the private Google Drive `VIRTUAL MACHINE` evidence folder. Only reviewed sanitized conclusions belong in GitHub.
 
+## Gate A evidence assessment
+
+After capture, assess the exact raw/sanitized pair with the repository evaluator.
+
+Example:
+
+```powershell
+$latest = Get-ChildItem "$env:LOCALAPPDATA\CU-VM\GateA" -Directory |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+
+./scripts/host/Test-CUVMGateAEvidence.ps1 `
+    -RawPath (Join-Path $latest.FullName 'GateA-Raw.json') `
+    -SanitizedPath (Join-Path $latest.FullName 'GateA-Sanitized.json') `
+    -CandidateSubnet '<owner-reviewed-candidate-cidr>'
+```
+
+The evaluator is **R0 / read-only** and fails closed. It verifies:
+
+- raw-to-sanitized evidence identity and SHA-256 binding;
+- collector SHA-256 provenance against the local reviewed collector bytes;
+- capture freshness;
+- collector query coverage;
+- CPU, RAM and healthy-storage fit against `config/vm-spec.psd1`;
+- Hyper-V, Secure Boot and TPM readiness;
+- candidate subnet overlap against captured IPv4 routes and existing NAT prefixes.
+
+A successful result is `READY_FOR_OWNER_DECISION`, **not** Gate A closure and **not** Gate B authorization.
+
+The default evidence freshness limit is 24 hours. Re-run the collector rather than bypassing stale network or memory evidence.
+
 ## Gate A decision
-After capture, cross-check the evidence against:
+
+Cross-check the evaluator output and source evidence against:
 
 - `config/vm-spec.psd1`;
 - `docs/architecture.md`;
@@ -58,6 +90,7 @@ Required output:
 6. VPN/address/route conflicts;
 7. non-overlapping Gate B NAT subnet proposal;
 8. assumptions disproved;
-9. revised risks or config changes required.
+9. revised risks or config changes required;
+10. evidence hash/provenance readback.
 
-No Gate B implementation is authorised by Gate A alone.
+No subnet is written by the evaluator. No Gate B implementation is authorised by Gate A alone.
