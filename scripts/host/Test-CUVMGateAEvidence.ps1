@@ -67,11 +67,11 @@ function Get-CUCidrRange {
         0
     }
     else {
-        (([uint64]0xFFFFFFFF -shl (32 - $prefix)) -band [uint64]0xFFFFFFFF)
+        (([uint64]4294967295 -shl (32 - $prefix)) -band [uint64]4294967295)
     }
 
     [uint64]$network = ([uint64]$address -band $mask)
-    [uint64]$broadcast = ($network -bor ((-bnot $mask) -band [uint64]0xFFFFFFFF))
+    [uint64]$broadcast = ($network -bor ((-bnot $mask) -band [uint64]4294967295))
 
     [pscustomobject]@{
         Cidr      = $Cidr
