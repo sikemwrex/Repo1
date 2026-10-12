@@ -54,7 +54,11 @@ Get-Date | Out-Null
             [Parameter(Mandatory)]
             [string[]]$Routes,
 
-            [double]$AvailableMemoryGB = 12.0
+            [double]$AvailableMemoryGB = 12.0,
+
+            [string[]]$ExistingVMNames = @(),
+
+            [string[]]$ExistingSwitchNames = @()
         )
 
         $collectorHash = (Get-FileHash -LiteralPath $collectorPath -Algorithm SHA256).Hash
@@ -77,8 +81,31 @@ Get-Date | Out-Null
                     }
                 )
             }
-            NetNat = [ordered]@{ Data = @() }
+            HyperVVMs = [ordered]@{
+                Available = $true
+                Data = @(
+                    $ExistingVMNames | ForEach-Object {
+                        [ordered]@{ Name = $_ }
+                    }
+                )
+            }
+            VirtualSwitches = [ordered]@{
+                Available = $true
+                Data = @(
+                    $ExistingSwitchNames | ForEach-Object {
+                        [ordered]@{
+                            Name = $_
+                            SwitchType = 'Internal'
+                        }
+                    }
+                )
+            }
+            NetNat = [ordered]@{
+                Available = $true
+                Data = @()
+            }
             IPv4Routes = [ordered]@{
+                Available = $true
                 Data = @(
                     $Routes | ForEach-Object {
                         [ordered]@{ DestinationPrefix = $_ }
@@ -114,8 +141,8 @@ Get-Date | Out-Null
             HyperV = [ordered]@{
                 FeatureQueryAvailable = $true
                 FeatureState = '1'
-                ExistingVMCount = 0
-                ExistingSwitchCount = 1
+                ExistingVMCount = $ExistingVMNames.Count
+                ExistingSwitchCount = $ExistingSwitchNames.Count
                 ExistingNatCount = 0
             }
             Network = [ordered]@{
@@ -216,11 +243,45 @@ Get-Date | Out-Null
     }
 
     Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
-        '192.168.1.0/24'
+        '192.168.1.0/24',
+        '0.0.0.0/0'
     ) -AvailableMemoryGB 5.5
     $memory = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
     if ($memory.ExitCode -eq 0 -or $memory.Output.Verdict -ne 'BLOCKED') {
         throw 'Expected insufficient current available memory for startup allocation to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        '0.0.0.0/0'
+    )
+    $hostAddress = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.5/24'
+    if ($hostAddress.ExitCode -eq 0 -or $hostAddress.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected a non-network-aligned candidate CIDR to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        '0.0.0.0/0'
+    ) -ExistingVMNames @('CU-VM01')
+    $vmCollision = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
+    if ($vmCollision.ExitCode -eq 0 -or $vmCollision.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected an existing CU-VM01 name collision to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        '0.0.0.0/0'
+    ) -ExistingSwitchNames @('CU-NAT')
+    $switchCollision = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
+    if ($switchCollision.ExitCode -eq 0 -or $switchCollision.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected an existing CU-NAT switch collision to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @()
+    $missingRoutes = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
+    if ($missingRoutes.ExitCode -eq 0 -or $missingRoutes.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected missing route evidence to fail closed.'
     }
 
     Write-Output 'Gate A evidence evaluator behavioral regression: PASS'
