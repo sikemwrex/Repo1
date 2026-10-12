@@ -62,7 +62,12 @@ Get-Date | Out-Null
 
             [string[]]$ExistingSwitchNames = @(),
 
-            [int]$VpnConnectionCount = 0
+            [int]$VpnConnectionCount = 0,
+
+            [string]$IPv4Address = '192.168.1.60',
+
+            [ValidateRange(0, 32)]
+            [int]$IPv4PrefixLength = 24
         )
 
         $collectorHash = (Get-FileHash -LiteralPath $collectorPath -Algorithm SHA256).Hash
@@ -210,8 +215,8 @@ Get-Date | Out-Null
                 Available = $true
                 Data = @(
                     [ordered]@{
-                        IPAddress = '192.168.1.60'
-                        PrefixLength = 24
+                        IPAddress = $IPv4Address
+                        PrefixLength = $IPv4PrefixLength
                         InterfaceAlias = 'Ethernet'
                         InterfaceIndex = 7
                         AddressState = 'Preferred'
@@ -453,12 +458,21 @@ Get-Date | Out-Null
     }
 
     Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
-        '10.77.0.0/16',
+        '192.168.1.0/24',
         '0.0.0.0/0'
-    )
+    ) -IPv4Address '10.77.77.5' -IPv4PrefixLength 24
     $addressOverlap = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
     if ($addressOverlap.ExitCode -eq 0 -or $addressOverlap.Output.Verdict -ne 'BLOCKED') {
-        throw 'Expected candidate overlap with captured topology to fail closed.'
+        throw 'Expected candidate overlap with a captured IPv4 address/prefix to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        '0.0.0.0/0'
+    )
+    $tinySubnet = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/31'
+    if ($tinySubnet.ExitCode -eq 0 -or $tinySubnet.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected an unusably small internal NAT candidate subnet to fail closed.'
     }
 
     Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
