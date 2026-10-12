@@ -75,6 +75,7 @@ Get-Date | Out-Null
             CollectorSha256 = $collectorHash
             ReadOnlyGate = 'Gate A'
             Volumes = [ordered]@{
+                Available = $true
                 Data = @(
                     [ordered]@{
                         DriveLetter = 'C'
@@ -295,6 +296,16 @@ Get-Date | Out-Null
     $vpn = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
     if ($vpn.ExitCode -eq 0 -or $vpn.Output.Verdict -ne 'BLOCKED') {
         throw 'Expected unresolved configured VPN address space to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        'not-a-cidr',
+        '0.0.0.0/0'
+    )
+    $malformedRoute = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
+    if ($malformedRoute.ExitCode -eq 0 -or $malformedRoute.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected malformed captured route evidence to fail closed.'
     }
 
     Write-Output 'Gate A evidence evaluator behavioral regression: PASS'
