@@ -102,6 +102,27 @@ function Test-CUCidrOverlap {
     )
 }
 
+function Test-CUPrivateIPv4Cidr {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Cidr
+    )
+
+    $candidate = Get-CUCidrRange -Cidr $Cidr
+    foreach ($privateCidr in @('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')) {
+        $privateRange = Get-CUCidrRange -Cidr $privateCidr
+        if (
+            $candidate.Network -ge $privateRange.Network -and
+            $candidate.Broadcast -le $privateRange.Broadcast
+        ) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 $blockers = [System.Collections.Generic.List[string]]::new()
 $warnings = [System.Collections.Generic.List[string]]::new()
 $checks = [ordered]@{}
@@ -130,6 +151,54 @@ $config = Import-PowerShellDataFile -LiteralPath $ConfigPath
 
 $rawHash = (Get-FileHash -LiteralPath $RawPath -Algorithm SHA256).Hash
 $collectorHash = (Get-FileHash -LiteralPath $CollectorPath -Algorithm SHA256).Hash
+
+$requiredRawSections = @(
+    'OperatingSystem',
+    'ComputerSystem',
+    'Processor',
+    'Volumes',
+    'PhysicalDisks',
+    'HyperVFeature',
+    'SecureBoot',
+    'TPM',
+    'HyperVVMs',
+    'VirtualSwitches',
+    'NetNat',
+    'NetworkAdapters',
+    'IPv4Addresses',
+    'VpnConnections',
+    'IPv4Routes'
+)
+
+$missingRawSections = @(
+    $requiredRawSections |
+        Where-Object { $_ -notin $raw.PSObject.Properties.Name }
+)
+
+$checks.EvidenceEnvelope = [ordered]@{
+    RawSchemaVersion       = $raw.EvidenceSchemaVersion
+    SanitizedSchemaVersion = $sanitized.EvidenceSchemaVersion
+    RawReadOnlyGate        = $raw.ReadOnlyGate
+    SanitizedReadOnlyGate  = $sanitized.ReadOnlyGate
+    EvidenceIdPresent      = -not [string]::IsNullOrWhiteSpace([string]$raw.EvidenceId)
+    MissingRawSections     = $missingRawSections
+}
+
+if (
+    $raw.EvidenceSchemaVersion -ne '1.0' -or
+    $sanitized.EvidenceSchemaVersion -ne '1.0'
+) {
+    $blockers.Add('Unsupported or mismatched Gate A evidence schema version.')
+}
+if ($raw.ReadOnlyGate -ne 'Gate A' -or $sanitized.ReadOnlyGate -ne 'Gate A') {
+    $blockers.Add('Evidence does not declare the expected Gate A read-only boundary.')
+}
+if ([string]::IsNullOrWhiteSpace([string]$raw.EvidenceId)) {
+    $blockers.Add('Raw evidence has no EvidenceId.')
+}
+if ($missingRawSections.Count -gt 0) {
+    $blockers.Add("Raw Gate A evidence is missing required section(s): $($missingRawSections -join ', ').")
+}
 
 $checks.EvidenceIdentity = [ordered]@{
     RawEvidenceId       = $raw.EvidenceId
@@ -193,18 +262,104 @@ catch {
     $blockers.Add('Gate A evidence capture timestamp is invalid.')
 }
 
-$queryFailures = @($sanitized.QueryFailures)
+$rawQueryFailures = @(
+    $raw.PSObject.Properties |
+        Where-Object {
+            $_.Value -is [pscustomobject] -and
+            $_.Value.PSObject.Properties.Name -contains 'Available' -and
+            -not [bool]$_.Value.Available
+        } |
+        ForEach-Object Name |
+        Sort-Object
+)
+$sanitizedQueryFailures = @(
+    $sanitized.QueryFailures |
+        ForEach-Object { [string]$_ } |
+        Sort-Object
+)
+$queryFailureListsMatch = (
+    ($rawQueryFailures -join [char]0) -eq
+    ($sanitizedQueryFailures -join [char]0)
+)
+
 $checks.QueryCoverage = [ordered]@{
-    FailureCount = $queryFailures.Count
-    Failures     = $queryFailures
-    Complete     = ($queryFailures.Count -eq 0)
+    RawFailureCount       = $rawQueryFailures.Count
+    RawFailures           = $rawQueryFailures
+    SanitizedFailureCount = $sanitizedQueryFailures.Count
+    SanitizedFailures     = $sanitizedQueryFailures
+    ListsMatch            = $queryFailureListsMatch
+    Complete              = ($rawQueryFailures.Count -eq 0 -and $queryFailureListsMatch)
 }
-if ($queryFailures.Count -gt 0) {
-    $blockers.Add("Gate A collector reported query failures: $($queryFailures -join ', ').")
+if (-not $queryFailureListsMatch) {
+    $blockers.Add('Sanitized QueryFailures does not match failures derived from raw evidence.')
+}
+if ($rawQueryFailures.Count -gt 0) {
+    $blockers.Add("Gate A collector reported query failures: $($rawQueryFailures -join ', ').")
 }
 
-$installedMemoryGB = [double]$sanitized.Hardware.InstalledMemoryGB
-$availableMemoryGB = [double]$sanitized.Hardware.AvailableMemoryGB
+$processorData = @($raw.Processor.Data)
+$derivedPhysicalCores = [int](($processorData | Measure-Object -Property NumberOfCores -Sum).Sum)
+$derivedLogicalProcessors = [int](($processorData | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum)
+$derivedInstalledMemoryGB = if ([bool]$raw.ComputerSystem.Available) {
+    [math]::Round(([double]$raw.ComputerSystem.Data.TotalPhysicalMemory / 1GB), 2)
+}
+else {
+    0
+}
+$derivedAvailableMemoryGB = if ([bool]$raw.OperatingSystem.Available) {
+    [math]::Round((([double]$raw.OperatingSystem.Data.FreePhysicalMemoryKiB * 1KB) / 1GB), 2)
+}
+else {
+    0
+}
+$derivedHypervisorPresent = [bool]$raw.ComputerSystem.Data.HypervisorPresent
+$derivedFeatureAvailable = [bool]$raw.HyperVFeature.Available
+$derivedFeatureState = [string]$raw.HyperVFeature.Data.State
+$derivedSecureBootAvailable = [bool]$raw.SecureBoot.Available
+$derivedSecureBootEnabled = [bool]$raw.SecureBoot.Data.Enabled
+$derivedTpmAvailable = [bool]$raw.TPM.Available
+$derivedTpmPresent = [bool]$raw.TPM.Data.TpmPresent
+$derivedTpmReady = [bool]$raw.TPM.Data.TpmReady
+$derivedVmCount = @($raw.HyperVVMs.Data).Count
+$derivedSwitchCount = @($raw.VirtualSwitches.Data).Count
+$derivedNatCount = @($raw.NetNat.Data).Count
+$derivedVpnCount = @($raw.VpnConnections.Data).Count
+$derivedRouteCount = @($raw.IPv4Routes.Data).Count
+$derivedDefaultRouteCount = @(
+    @($raw.IPv4Routes.Data) |
+        Where-Object DestinationPrefix -eq '0.0.0.0/0'
+).Count
+
+$summaryMismatches = [System.Collections.Generic.List[string]]::new()
+if ([double]$sanitized.Hardware.InstalledMemoryGB -ne $derivedInstalledMemoryGB) { $summaryMismatches.Add('InstalledMemoryGB') }
+if ([double]$sanitized.Hardware.AvailableMemoryGB -ne $derivedAvailableMemoryGB) { $summaryMismatches.Add('AvailableMemoryGB') }
+if ([int]$sanitized.Hardware.PhysicalCores -ne $derivedPhysicalCores) { $summaryMismatches.Add('PhysicalCores') }
+if ([int]$sanitized.Hardware.LogicalProcessors -ne $derivedLogicalProcessors) { $summaryMismatches.Add('LogicalProcessors') }
+if ([bool]$sanitized.Hardware.HypervisorPresent -ne $derivedHypervisorPresent) { $summaryMismatches.Add('HypervisorPresent') }
+if ([bool]$sanitized.HyperV.FeatureQueryAvailable -ne $derivedFeatureAvailable) { $summaryMismatches.Add('FeatureQueryAvailable') }
+if ([string]$sanitized.HyperV.FeatureState -ne $derivedFeatureState) { $summaryMismatches.Add('FeatureState') }
+if ([int]$sanitized.HyperV.ExistingVMCount -ne $derivedVmCount) { $summaryMismatches.Add('ExistingVMCount') }
+if ([int]$sanitized.HyperV.ExistingSwitchCount -ne $derivedSwitchCount) { $summaryMismatches.Add('ExistingSwitchCount') }
+if ([int]$sanitized.HyperV.ExistingNatCount -ne $derivedNatCount) { $summaryMismatches.Add('ExistingNatCount') }
+if ([bool]$sanitized.Security.SecureBootAvailable -ne $derivedSecureBootAvailable) { $summaryMismatches.Add('SecureBootAvailable') }
+if ([bool]$sanitized.Security.SecureBootEnabled -ne $derivedSecureBootEnabled) { $summaryMismatches.Add('SecureBootEnabled') }
+if ([bool]$sanitized.Security.TpmQueryAvailable -ne $derivedTpmAvailable) { $summaryMismatches.Add('TpmQueryAvailable') }
+if ([bool]$sanitized.Security.TpmPresent -ne $derivedTpmPresent) { $summaryMismatches.Add('TpmPresent') }
+if ([bool]$sanitized.Security.TpmReady -ne $derivedTpmReady) { $summaryMismatches.Add('TpmReady') }
+if ([int]$sanitized.Network.VpnConnectionCount -ne $derivedVpnCount) { $summaryMismatches.Add('VpnConnectionCount') }
+if ([int]$sanitized.Network.IPv4RouteCount -ne $derivedRouteCount) { $summaryMismatches.Add('IPv4RouteCount') }
+if ([int]$sanitized.Network.DefaultRouteCount -ne $derivedDefaultRouteCount) { $summaryMismatches.Add('DefaultRouteCount') }
+
+$checks.SanitizedConsistency = [ordered]@{
+    Match      = ($summaryMismatches.Count -eq 0)
+    Mismatches = @($summaryMismatches)
+}
+if ($summaryMismatches.Count -gt 0) {
+    $blockers.Add("Sanitized evidence disagrees with decision-critical values derived from raw evidence: $($summaryMismatches -join ', ').")
+}
+
+$installedMemoryGB = $derivedInstalledMemoryGB
+$availableMemoryGB = $derivedAvailableMemoryGB
 $startupMemoryGB = [double]$config.Compute.StartupMemoryGB
 $preferredMemoryGB = [double]$config.Compute.PreferredMemoryGB
 $startupInstalledReserveGB = $installedMemoryGB - $startupMemoryGB
@@ -237,7 +392,7 @@ elseif (-not $preferredViable) {
 }
 
 $processorCount = [int]$config.Compute.ProcessorCount
-$logicalProcessors = [int]$sanitized.Hardware.LogicalProcessors
+$logicalProcessors = $derivedLogicalProcessors
 $checks.Compute = [ordered]@{
     RequestedProcessors = $processorCount
     LogicalProcessors   = $logicalProcessors
@@ -308,16 +463,16 @@ $targetSwitchConflicts = @(
         Where-Object { $_.Name -eq $config.Network.SwitchName }
 )
 
-$featureState = [string]$sanitized.HyperV.FeatureState
+$featureState = $derivedFeatureState
 $hyperVEnabled = $featureState -in @('1', 'Enabled')
 $checks.HyperV = [ordered]@{
-    HypervisorPresent     = [bool]$sanitized.Hardware.HypervisorPresent
-    FeatureQueryAvailable = [bool]$sanitized.HyperV.FeatureQueryAvailable
+    HypervisorPresent     = $derivedHypervisorPresent
+    FeatureQueryAvailable = $derivedFeatureAvailable
     FeatureState          = $featureState
     HyperVEnabled         = $hyperVEnabled
-    ExistingVMCount       = [int]$sanitized.HyperV.ExistingVMCount
-    ExistingSwitchCount   = [int]$sanitized.HyperV.ExistingSwitchCount
-    ExistingNatCount      = [int]$sanitized.HyperV.ExistingNatCount
+    ExistingVMCount       = $derivedVmCount
+    ExistingSwitchCount   = $derivedSwitchCount
+    ExistingNatCount      = $derivedNatCount
     ExistingVMNames       = $existingVmNames
     VMNameConflict        = $vmNameConflict
     TargetSwitchName      = $config.Network.SwitchName
@@ -339,11 +494,11 @@ if ($targetSwitchConflicts.Count -gt 0) {
 }
 
 $checks.PlatformSecurity = [ordered]@{
-    SecureBootAvailable = [bool]$sanitized.Security.SecureBootAvailable
-    SecureBootEnabled   = [bool]$sanitized.Security.SecureBootEnabled
-    TpmQueryAvailable   = [bool]$sanitized.Security.TpmQueryAvailable
-    TpmPresent          = [bool]$sanitized.Security.TpmPresent
-    TpmReady            = [bool]$sanitized.Security.TpmReady
+    SecureBootAvailable = $derivedSecureBootAvailable
+    SecureBootEnabled   = $derivedSecureBootEnabled
+    TpmQueryAvailable   = $derivedTpmAvailable
+    TpmPresent          = $derivedTpmPresent
+    TpmReady            = $derivedTpmReady
 }
 if (
     -not $checks.PlatformSecurity.SecureBootAvailable -or
@@ -369,6 +524,9 @@ else {
         $candidateRange = Get-CUCidrRange -Cidr $CandidateSubnet
         if (-not $candidateRange.IsNetworkAligned) {
             throw "Candidate CIDR must identify the network address, not a host address: $CandidateSubnet"
+        }
+        if (-not (Test-CUPrivateIPv4Cidr -Cidr $CandidateSubnet)) {
+            throw "Candidate CIDR must be wholly contained in RFC1918 private IPv4 address space: $CandidateSubnet"
         }
 
         $routeEvidenceAvailable = [bool]$raw.IPv4Routes.Available
@@ -431,8 +589,28 @@ else {
             }
         }
 
+        $addressEvidenceAvailable = [bool]$raw.IPv4Addresses.Available
+        if (-not $addressEvidenceAvailable) {
+            throw 'Captured IPv4 address evidence is unavailable.'
+        }
+        foreach ($address in @($raw.IPv4Addresses.Data)) {
+            if ([string]::IsNullOrWhiteSpace([string]$address.IPAddress)) {
+                throw 'Captured IPv4 address evidence contains an empty IP address.'
+            }
+            $addressCidr = "$($address.IPAddress)/$($address.PrefixLength)"
+            try {
+                $null = Get-CUCidrRange -Cidr $addressCidr
+            }
+            catch {
+                throw "Captured IPv4 address evidence contains an invalid address/prefix '$addressCidr': $($_.Exception.Message)"
+            }
+            if (Test-CUCidrOverlap -First $CandidateSubnet -Second $addressCidr) {
+                $subnetOverlaps += "address:$addressCidr"
+            }
+        }
+
         $subnetOverlaps = @($subnetOverlaps | Sort-Object -Unique)
-        $vpnCount = [int]$sanitized.Network.VpnConnectionCount
+        $vpnCount = $derivedVpnCount
         $checks.Network = [ordered]@{
             CandidateSubnet = $CandidateSubnet
             Assessed        = $true
