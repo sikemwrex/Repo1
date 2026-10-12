@@ -447,6 +447,11 @@ Get-Date | Out-Null
         throw 'Expected non-RFC1918 candidate subnet to fail closed.'
     }
 
+    $tooSmallSubnet = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/31'
+    if ($tooSmallSubnet.ExitCode -eq 0 -or $tooSmallSubnet.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected /31 or smaller usable-host NAT candidate to fail closed.'
+    }
+
     Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
         '10.77.0.0/16',
         '0.0.0.0/0'
