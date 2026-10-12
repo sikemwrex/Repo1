@@ -249,6 +249,15 @@ if (-not $checks.Compute.Viable) {
 
 $requiredStorageGB = [double]$config.Storage.SizeGB + $MinimumStorageReserveGB
 $volumeData = @($raw.Volumes.Data)
+$volumeEvidenceAvailable = [bool]$raw.Volumes.Available
+$checks.VolumeEvidence = [ordered]@{
+    Available = $volumeEvidenceAvailable
+    Count     = $volumeData.Count
+}
+if (-not $volumeEvidenceAvailable) {
+    $blockers.Add('Volume evidence is unavailable.')
+}
+
 $eligibleVolumes = @(
     $volumeData | Where-Object {
         $_.HealthStatus -eq 'Healthy' -and
@@ -271,6 +280,20 @@ $checks.Storage = [ordered]@{
 }
 if (-not $checks.Storage.Viable) {
     $blockers.Add("No healthy fixed volume has at least $requiredStorageGB GB free for the declared VHD plus storage reserve.")
+}
+
+$vmEvidenceAvailable = [bool]$raw.HyperVVMs.Available
+$switchEvidenceAvailable = [bool]$raw.VirtualSwitches.Available
+$natEvidenceAvailable = [bool]$raw.NetNat.Available
+
+if (-not $vmEvidenceAvailable) {
+    $blockers.Add('Hyper-V VM inventory evidence is unavailable.')
+}
+if (-not $switchEvidenceAvailable) {
+    $blockers.Add('Virtual-switch inventory evidence is unavailable.')
+}
+if (-not $natEvidenceAvailable) {
+    $blockers.Add('NAT inventory evidence is unavailable.')
 }
 
 $existingVmNames = @(
@@ -348,34 +371,41 @@ else {
             throw "Candidate CIDR must identify the network address, not a host address: $CandidateSubnet"
         }
 
+        $routeEvidenceAvailable = [bool]$raw.IPv4Routes.Available
         $routeData = @($raw.IPv4Routes.Data)
-        $defaultRoutes = @(
-            $routeData |
-                Where-Object DestinationPrefix -eq '0.0.0.0/0'
-        )
-        if ($routeData.Count -eq 0 -or $defaultRoutes.Count -eq 0) {
-            throw 'Captured route evidence is incomplete: at least one IPv4 route and one default route are required.'
+        if (-not $routeEvidenceAvailable) {
+            throw 'Captured IPv4 route evidence is unavailable.'
         }
 
         $routePrefixes = @(
-            $raw.IPv4Routes.Data |
+            $routeData |
                 ForEach-Object DestinationPrefix |
-                Where-Object {
-                    $_ -and
-                    $_ -match '^\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}$' -and
-                    $_ -ne '0.0.0.0/0'
-                } |
+                Where-Object { $_ } |
                 Sort-Object -Unique
         )
+        if ($routePrefixes.Count -eq 0) {
+            throw 'Captured route evidence is incomplete: no IPv4 route prefixes were recorded.'
+        }
 
         foreach ($routePrefix in $routePrefixes) {
             try {
-                if (Test-CUCidrOverlap -First $CandidateSubnet -Second $routePrefix) {
-                    $subnetOverlaps += $routePrefix
+                $routeRange = Get-CUCidrRange -Cidr $routePrefix
+                if (-not $routeRange.IsNetworkAligned) {
+                    throw "Captured route CIDR is not network aligned: $routePrefix"
                 }
             }
             catch {
-                $warnings.Add("Skipped unparsable captured IPv4 route prefix: $routePrefix")
+                throw "Captured IPv4 route evidence contains an invalid prefix '$routePrefix': $($_.Exception.Message)"
+            }
+        }
+
+        if ('0.0.0.0/0' -notin $routePrefixes) {
+            throw 'Captured route evidence is incomplete: a default IPv4 route is required.'
+        }
+
+        foreach ($routePrefix in @($routePrefixes | Where-Object { $_ -ne '0.0.0.0/0' })) {
+            if (Test-CUCidrOverlap -First $CandidateSubnet -Second $routePrefix) {
+                $subnetOverlaps += $routePrefix
             }
         }
 
@@ -387,12 +417,17 @@ else {
         )
         foreach ($natPrefix in $natPrefixes) {
             try {
-                if (Test-CUCidrOverlap -First $CandidateSubnet -Second $natPrefix) {
-                    $subnetOverlaps += $natPrefix
+                $natRange = Get-CUCidrRange -Cidr $natPrefix
+                if (-not $natRange.IsNetworkAligned) {
+                    throw "Captured NAT CIDR is not network aligned: $natPrefix"
                 }
             }
             catch {
-                $warnings.Add("Skipped unparsable captured NAT prefix: $natPrefix")
+                throw "Captured NAT evidence contains an invalid prefix '$natPrefix': $($_.Exception.Message)"
+            }
+
+            if (Test-CUCidrOverlap -First $CandidateSubnet -Second $natPrefix) {
+                $subnetOverlaps += $natPrefix
             }
         }
 
