@@ -529,6 +529,10 @@ else {
             throw "Candidate CIDR must be wholly contained in RFC1918 private IPv4 address space: $CandidateSubnet"
         }
 
+        if ($candidateRange.Prefix -gt 30) {
+            throw "Candidate CIDR is too small for an internal NAT subnet: $CandidateSubnet"
+        }
+
         $routeEvidenceAvailable = [bool]$raw.IPv4Routes.Available
         $routeData = @($raw.IPv4Routes.Data)
         if (-not $routeEvidenceAvailable) {
