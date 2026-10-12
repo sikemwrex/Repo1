@@ -200,6 +200,61 @@ if ($missingRawSections.Count -gt 0) {
     $blockers.Add("Raw Gate A evidence is missing required section(s): $($missingRawSections -join ', ').")
 }
 
+$malformedRawSections = [System.Collections.Generic.List[string]]::new()
+foreach ($sectionName in $requiredRawSections) {
+    if ($sectionName -in $missingRawSections) {
+        continue
+    }
+
+    $section = $raw.$sectionName
+    if ($section -isnot [pscustomobject]) {
+        $malformedRawSections.Add("$sectionName:not-object")
+        continue
+    }
+    if ($section.PSObject.Properties.Name -notcontains 'Available') {
+        $malformedRawSections.Add("$sectionName:missing-Available")
+    }
+    elseif ($section.Available -isnot [bool]) {
+        $malformedRawSections.Add("$sectionName:Available-not-Boolean")
+    }
+    if ($section.PSObject.Properties.Name -notcontains 'Data') {
+        $malformedRawSections.Add("$sectionName:missing-Data")
+    }
+}
+$checks.RawSectionShape = [ordered]@{
+    Valid     = ($malformedRawSections.Count -eq 0)
+    Malformed = @($malformedRawSections)
+}
+if ($malformedRawSections.Count -gt 0) {
+    $blockers.Add("Raw Gate A evidence contains malformed section envelope(s): $($malformedRawSections -join ', ').")
+}
+
+$booleanEvidenceChecks = @(
+    [pscustomobject]@{ Name = 'raw.ComputerSystem.Data.HypervisorPresent'; Value = $raw.ComputerSystem.Data.HypervisorPresent },
+    [pscustomobject]@{ Name = 'raw.SecureBoot.Data.Enabled'; Value = $raw.SecureBoot.Data.Enabled },
+    [pscustomobject]@{ Name = 'raw.TPM.Data.TpmPresent'; Value = $raw.TPM.Data.TpmPresent },
+    [pscustomobject]@{ Name = 'raw.TPM.Data.TpmReady'; Value = $raw.TPM.Data.TpmReady },
+    [pscustomobject]@{ Name = 'sanitized.Hardware.HypervisorPresent'; Value = $sanitized.Hardware.HypervisorPresent },
+    [pscustomobject]@{ Name = 'sanitized.Security.SecureBootAvailable'; Value = $sanitized.Security.SecureBootAvailable },
+    [pscustomobject]@{ Name = 'sanitized.Security.SecureBootEnabled'; Value = $sanitized.Security.SecureBootEnabled },
+    [pscustomobject]@{ Name = 'sanitized.Security.TpmQueryAvailable'; Value = $sanitized.Security.TpmQueryAvailable },
+    [pscustomobject]@{ Name = 'sanitized.Security.TpmPresent'; Value = $sanitized.Security.TpmPresent },
+    [pscustomobject]@{ Name = 'sanitized.Security.TpmReady'; Value = $sanitized.Security.TpmReady },
+    [pscustomobject]@{ Name = 'sanitized.HyperV.FeatureQueryAvailable'; Value = $sanitized.HyperV.FeatureQueryAvailable }
+)
+$invalidBooleanEvidence = @(
+    $booleanEvidenceChecks |
+        Where-Object { $_.Value -isnot [bool] } |
+        ForEach-Object Name
+)
+$checks.BooleanEvidenceTypes = [ordered]@{
+    Valid   = ($invalidBooleanEvidence.Count -eq 0)
+    Invalid = $invalidBooleanEvidence
+}
+if ($invalidBooleanEvidence.Count -gt 0) {
+    $blockers.Add("Decision-critical Boolean evidence has invalid JSON types: $($invalidBooleanEvidence -join ', ').")
+}
+
 $checks.EvidenceIdentity = [ordered]@{
     RawEvidenceId       = $raw.EvidenceId
     SanitizedEvidenceId = $sanitized.EvidenceId
