@@ -53,6 +53,7 @@ Get-Date | Out-Null
             [datetimeoffset]$CapturedAt,
 
             [Parameter(Mandatory)]
+            [AllowEmptyCollection()]
             [string[]]$Routes,
 
             [double]$AvailableMemoryGB = 12.0,
