@@ -60,7 +60,9 @@ Get-Date | Out-Null
 
             [string[]]$ExistingVMNames = @(),
 
-            [string[]]$ExistingSwitchNames = @()
+            [string[]]$ExistingSwitchNames = @(),
+
+            [int]$VpnConnectionCount = 0
         )
 
         $collectorHash = (Get-FileHash -LiteralPath $collectorPath -Algorithm SHA256).Hash
@@ -148,7 +150,7 @@ Get-Date | Out-Null
                 ExistingNatCount = 0
             }
             Network = [ordered]@{
-                VpnConnectionCount = 0
+                VpnConnectionCount = $VpnConnectionCount
             }
             QueryFailures = @()
         }
@@ -284,6 +286,15 @@ Get-Date | Out-Null
     $missingRoutes = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
     if ($missingRoutes.ExitCode -eq 0 -or $missingRoutes.Output.Verdict -ne 'BLOCKED') {
         throw 'Expected missing route evidence to fail closed.'
+    }
+
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        '0.0.0.0/0'
+    ) -VpnConnectionCount 1
+    $vpn = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
+    if ($vpn.ExitCode -eq 0 -or $vpn.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected unresolved configured VPN address space to fail closed.'
     }
 
     Write-Output 'Gate A evidence evaluator behavioral regression: PASS'
