@@ -488,6 +488,21 @@ Get-Date | Out-Null
         throw 'Expected missing required raw evidence section to fail closed.'
     }
 
+    Write-CUTestEvidence -CapturedAt ([datetimeoffset]::UtcNow) -Routes @(
+        '192.168.1.0/24',
+        '0.0.0.0/0'
+    )
+    $rawBooleanTamper = Get-Content -LiteralPath $rawPath -Raw | ConvertFrom-Json -Depth 20
+    $rawBooleanTamper.SecureBoot.Data.Enabled = 'false'
+    $rawBooleanTamper | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $rawPath -Encoding utf8
+    $sanitizedBooleanTamper = Get-Content -LiteralPath $sanitizedPath -Raw | ConvertFrom-Json -Depth 20
+    $sanitizedBooleanTamper.RawEvidenceSha256 = (Get-FileHash -LiteralPath $rawPath -Algorithm SHA256).Hash
+    $sanitizedBooleanTamper | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $sanitizedPath -Encoding utf8
+    $booleanType = Invoke-CUEvaluatorCase -CandidateSubnet '10.77.77.0/24'
+    if ($booleanType.ExitCode -eq 0 -or $booleanType.Output.Verdict -ne 'BLOCKED') {
+        throw 'Expected string-typed Boolean evidence to fail closed.'
+    }
+
     Write-Output 'Gate A evidence evaluator behavioral regression: PASS'
 }
 finally {
