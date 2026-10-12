@@ -61,7 +61,7 @@ Repository privacy and GitHub Issues capability remain pre-build governance item
 
 ## Current phase
 
-**Gate A executable / pre-Gate B.** Exact `main` (`e81daaac2d9661a4d109b6dd8db7cb72823f0836`) passed PowerShell Quality #65 attempt 2 successfully on that SHA. The Gate A collector and smoke/read-only guards are on `main`. No host virtualization change is authorised by repository content alone.
+**Gate A executable / pre-Gate B.** Validation lineage: `e81daaac2d9661a4d109b6dd8db7cb72823f0836` passed PowerShell Quality #65 attempt 2; PR #19 then merged to `6bfab43c80d6f7072388affa644c7c7d7126b324`, which passed post-merge PowerShell Quality #67. These SHAs are immutable evidence references, not a claim that either remains the live `main` tip. The Gate A collector and smoke/read-only guards are on `main`. No host virtualization change is authorised by repository content alone.
 
 Next authorized host action:
 
