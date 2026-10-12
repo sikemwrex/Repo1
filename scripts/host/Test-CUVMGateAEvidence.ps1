@@ -512,6 +512,15 @@ $existingVmNames = @(
         Where-Object { $_ }
 )
 $existingSwitches = @($raw.VirtualSwitches.Data)
+$existingNats = @($raw.NetNat.Data)
+$existingNatSummaries = @(
+    $existingNats | ForEach-Object {
+        [pscustomobject]@{
+            Name = $_.Name
+            InternalIPInterfaceAddressPrefix = $_.InternalIPInterfaceAddressPrefix
+        }
+    }
+)
 $vmNameConflict = ($config.VMName -in $existingVmNames)
 $targetSwitchConflicts = @(
     $existingSwitches |
@@ -528,6 +537,8 @@ $checks.HyperV = [ordered]@{
     ExistingVMCount       = $derivedVmCount
     ExistingSwitchCount   = $derivedSwitchCount
     ExistingNatCount      = $derivedNatCount
+    ExistingNats          = $existingNatSummaries
+    NatReconciliationRequired = ($derivedNatCount -gt 0)
     ExistingVMNames       = $existingVmNames
     VMNameConflict        = $vmNameConflict
     TargetSwitchName      = $config.Network.SwitchName
@@ -546,6 +557,9 @@ if ($vmNameConflict) {
 }
 if ($targetSwitchConflicts.Count -gt 0) {
     $blockers.Add("A virtual switch named $($config.Network.SwitchName) already exists and must be explicitly reconciled before Gate B.")
+}
+if ($derivedNatCount -gt 0) {
+    $blockers.Add('An existing WinNAT configuration is present. Windows supports only one internal NAT subnet prefix per host; the existing NAT must be explicitly reconciled before Gate B.')
 }
 
 $checks.PlatformSecurity = [ordered]@{
