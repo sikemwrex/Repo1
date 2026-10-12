@@ -208,17 +208,17 @@ foreach ($sectionName in $requiredRawSections) {
 
     $section = $raw.$sectionName
     if ($section -isnot [pscustomobject]) {
-        $malformedRawSections.Add("$sectionName:not-object")
+        $malformedRawSections.Add("${sectionName}:not-object")
         continue
     }
     if ($section.PSObject.Properties.Name -notcontains 'Available') {
-        $malformedRawSections.Add("$sectionName:missing-Available")
+        $malformedRawSections.Add("${sectionName}:missing-Available")
     }
     elseif ($section.Available -isnot [bool]) {
-        $malformedRawSections.Add("$sectionName:Available-not-Boolean")
+        $malformedRawSections.Add("${sectionName}:Available-not-Boolean")
     }
     if ($section.PSObject.Properties.Name -notcontains 'Data') {
-        $malformedRawSections.Add("$sectionName:missing-Data")
+        $malformedRawSections.Add("${sectionName}:missing-Data")
     }
 }
 $checks.RawSectionShape = [ordered]@{
