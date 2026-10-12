@@ -65,7 +65,8 @@ The evaluator is **R0 / read-only** and fails closed. It verifies:
 - collector query coverage;
 - CPU, RAM and healthy-storage fit against `config/vm-spec.psd1`;
 - Hyper-V, Secure Boot and TPM readiness;
-- candidate subnet overlap against captured IPv4 routes and existing NAT prefixes.
+- candidate subnet overlap against captured IPv4 routes and existing NAT prefixes;
+- configured VPN presence, which blocks automatic subnet readiness until its potential address space is explicitly assessed.
 
 A successful result is `READY_FOR_OWNER_DECISION`, **not** Gate A closure and **not** Gate B authorization.
 
